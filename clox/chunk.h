@@ -13,6 +13,6 @@ typedef struct {
     uint8_t* code;
 } Chunk;
 
-void init_chunk(Chunk* chunk);
+void initChunk(Chunk* chunk);
 
 #endif
