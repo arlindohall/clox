@@ -1,0 +1,16 @@
+var message = "hello, world";
+print message;
+
+var number = 10.1;
+
+if (number > 0) {
+    print "First branch";
+    print number;
+}
+
+if (number > 12.3 or number < 11) {
+    print number;
+}
+
+print 11.to_string(); // Method calls on number literals
+print "11".to_number() + 5; // Implemented interesting builtin method

@@ -1,0 +1,11 @@
+var l = list();
+l.push(1);
+l.push("hello");
+
+print l;
+print l.get(1);
+
+print l.pop();
+print l.pop();
+
+print l;

@@ -1,0 +1,57 @@
+class Bacon {
+    cook() {
+        print "sizzle";
+    }
+}
+
+var bacon = Bacon();
+bacon.cook();
+
+Bacon().cook();
+
+class Cake {
+  taste() {
+    var adjective = "delicious";
+    print "The " + this.flavor + " cake is " + adjective + "!";
+  }
+
+  smell(scent) {
+      print "The " + this.flavor + " cake smells " + scent + "!";
+  }
+}
+
+var cake = Cake();
+cake.flavor = "German chocolate";
+cake.taste(); // Prints "The German chocolate cake is delicious!".
+cake.smell("tasty");
+
+class Person {
+    greet() {
+        print "Hi, I'm " + this.name;
+    }
+}
+
+var jane = Person();
+var phil = Person();
+
+jane.name = "Jane";
+phil.name = "Phil";
+
+jane.greet();
+
+jane.greet = phil.greet;
+jane.greet();
+
+class Dog {
+    init(name) {
+        this.name = name;
+        this.breed = "Mutt";
+    }
+
+    greet() {
+        print "Hi, I'm " + this.name + ", and I'm a " + this.breed + ".";
+    }
+}
+
+var rover = Dog("Rover");
+rover.greet();
