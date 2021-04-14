@@ -6,6 +6,7 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [
+                "${workspaceFolder}/clox/common.h",
                 "${workspaceFolder}/clox/memory.h"
             ],
             "macFrameworkPath": [],
