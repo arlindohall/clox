@@ -13,10 +13,14 @@ typedef struct {
 
 static bool isAtEnd();
 static void skipWhitespace();
+
 static char advance();
 static char peek();
 static char peekNext();
 static bool match(char);
+
+static Token string();
+
 static Token makeToken(TokenType);
 static Token errorToken(const char*);
 
@@ -57,6 +61,7 @@ Token scanToken() {
             return makeToken(match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
         case '>':
             return makeToken(match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+        case '"': return string();
     }
 
     return errorToken("Unexpected character");
@@ -115,6 +120,19 @@ static bool match(char expected) {
 
     scanner.current++;
     return true;
+}
+
+static Token string() {
+    while (peek() != '"' && !isAtEnd()) {
+        if (peek() == '\n') scanner.line++;
+        advance();
+    }
+
+    if (isAtEnd()) return errorToken("Unterminated string");
+
+    // The closing quote
+    advance();
+    return makeToken(TOKEN_STRING);
 }
 
 static Token makeToken(TokenType type) {
