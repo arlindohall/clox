@@ -15,6 +15,7 @@ static bool isAtEnd();
 static void skipWhitespace();
 static char advance();
 static char peek();
+static char peekNext();
 static bool match(char);
 static Token makeToken(TokenType);
 static Token errorToken(const char*);
@@ -80,6 +81,14 @@ static void skipWhitespace() {
                 advance();
                 break;
 
+            case '/':
+                if (peekNext() == '/') {
+                    while (peek() != '\n' && !isAtEnd()) advance();
+                } else {
+                    return;
+                }
+                break;
+
             default:
                 return;
         }
@@ -93,6 +102,11 @@ static char advance() {
 
 static char peek() {
     return *scanner.current;
+}
+
+static char peekNext() {
+    if (isAtEnd()) return '\0';
+    return scanner.current[1];
 }
 
 static bool match(char expected) {
