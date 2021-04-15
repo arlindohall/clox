@@ -17,9 +17,12 @@ static void skipWhitespace();
 static char advance();
 static char peek();
 static char peekNext();
+
 static bool match(char);
+static bool isDigit(char);
 
 static Token string();
+static Token number();
 
 static Token makeToken(TokenType);
 static Token errorToken(const char*);
@@ -40,6 +43,7 @@ Token scanToken() {
     if (isAtEnd()) return makeToken(TOKEN_EOF);
 
     char c = advance();
+    if (isDigit(c)) return number();
 
     switch (c) {
         case '(': return makeToken(TOKEN_LEFT_PAREN);
@@ -122,6 +126,10 @@ static bool match(char expected) {
     return true;
 }
 
+static bool isDigit(char digit) {
+    return '0' <= digit && digit <= '9';
+}
+
 static Token string() {
     while (peek() != '"' && !isAtEnd()) {
         if (peek() == '\n') scanner.line++;
@@ -133,6 +141,20 @@ static Token string() {
     // The closing quote
     advance();
     return makeToken(TOKEN_STRING);
+}
+
+static Token number() {
+    while (isDigit(peek()) && !isAtEnd()) {
+        advance();
+    }
+
+    if ('.' == peek() && isDigit(peekNext())) {
+        advance();
+
+        while (isDigit(peek())) advance();
+    }
+
+    return makeToken(TOKEN_NUMBER);
 }
 
 static Token makeToken(TokenType type) {
