@@ -15,9 +15,18 @@ typedef struct {
 
 Parser parser;
 
+Chunk* compilingChunk;
+
 static void advance();
 static void expression();
 static void consume(TokenType, const char*);
+static void endCompiler();
+
+static void emitReturn();
+static void emitByte(uint8_t);
+static void emitBytes(uint8_t, uint8_t);
+
+static Chunk* currentChunk();
 
 static void error(const char*);
 static void errorAtCurrent(const char*);
@@ -25,6 +34,7 @@ static void errorAt(Token*, const char*);
 
 bool compile(const char* source, Chunk* chunk) {
     initScanner(source);
+    compilingChunk = chunk;
 
     parser.hadError = false;
     parser.hadError = false;
@@ -32,6 +42,7 @@ bool compile(const char* source, Chunk* chunk) {
     advance();
     expression();
     consume(TOKEN_EOF, "Expect end of expression.");
+    endCompiler();
 
     return !parser.hadError;
 }
@@ -62,6 +73,27 @@ static void errorAt(Token* token, const char* message) {
     parser.hadError = true;
 }
 
+static void emitByte(uint8_t byte) {
+    writeChunk(currentChunk(), byte, parser.previous.line);
+}
+
+static Chunk* currentChunk() {
+    return compilingChunk;
+}
+
+static void endCompiler() {
+    emitReturn();
+}
+
+static void emitReturn() {
+    emitByte(OP_RETURN);
+}
+
+static void emitBytes(uint8_t byte1, uint8_t byte2) {
+    emitByte(byte1);
+    emitByte(byte2);
+}
+
 static void advance() {
     parser.previous = parser.current;
 
@@ -82,4 +114,8 @@ static void consume(TokenType type, const char* message) {
     errorAtCurrent(message);
 }
 
-static void expression() {}
+static void expression() {
+    // This is where the guts of the compiler go, but until it is implemented,
+    // I think we're correctly going to get an error from running against any
+    // expression/input.
+}
