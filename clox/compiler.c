@@ -26,6 +26,8 @@ static void emitReturn();
 static void emitByte(uint8_t);
 static void emitBytes(uint8_t, uint8_t);
 
+static uint8_t makeConstant(Value value);
+
 static Chunk* currentChunk();
 
 static void error(const char*);
@@ -47,6 +49,10 @@ bool compile(const char* source, Chunk* chunk) {
     return !parser.hadError;
 }
 
+/// # Error handling
+///
+/// This section contains functions for dealing with error tokens that were found
+/// during the scanning stage of the interpreter.
 static void error(const char* message) {
     errorAt(&parser.previous, message);
 }
@@ -73,8 +79,17 @@ static void errorAt(Token* token, const char* message) {
     parser.hadError = true;
 }
 
+/// # Bytecode emitter
+///
+/// This section contains functions for emtting bytes to the current chunk of
+/// bytecode.
 static void emitByte(uint8_t byte) {
     writeChunk(currentChunk(), byte, parser.previous.line);
+}
+
+static void emitBytes(uint8_t byte1, uint8_t byte2) {
+    emitByte(byte1);
+    emitByte(byte2);
 }
 
 static Chunk* currentChunk() {
@@ -89,11 +104,25 @@ static void emitReturn() {
     emitByte(OP_RETURN);
 }
 
-static void emitBytes(uint8_t byte1, uint8_t byte2) {
-    emitByte(byte1);
-    emitByte(byte2);
+static void emitConstant(Value value) {
+    emitBytes(OP_CONSTANT, makeConstant(value));
 }
 
+static uint8_t makeConstant(Value value) {
+    int constant = addConstant(currentChunk(), value);
+    if (constant > UINT8_MAX) {
+        error("Too many constants in one chunk.");
+        return 0;
+    }
+
+    return (uint8_t) constant;
+}
+
+/// # Compiler control functions
+///
+/// This section is made of functions that control the flow of the compiler/parser.
+/// They either move the current token forward, check the surrounding tokens, or
+/// dispatch to some sub-section of the parser to handle a kind of token.
 static void advance() {
     parser.previous = parser.current;
 
@@ -118,4 +147,14 @@ static void expression() {
     // This is where the guts of the compiler go, but until it is implemented,
     // I think we're correctly going to get an error from running against any
     // expression/input.
+}
+
+static void number() {
+    double value = strtod(parser.previous.start, NULL);
+    emitConstant(value);
+}
+
+static void grouping() {
+    expression();
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
