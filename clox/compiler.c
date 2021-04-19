@@ -158,3 +158,17 @@ static void grouping() {
     expression();
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
+
+static void unary() {
+    TokenType operatorType = parser.previous.type;
+
+    // Compile the operand
+    expression();
+
+    // Emit the operator instruction
+    switch (operatorType) {
+        case TOKEN_MINUS: emitByte(OP_NEGATE); break;
+        default:
+            return;
+    }
+}
