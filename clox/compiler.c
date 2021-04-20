@@ -215,6 +215,11 @@ static void binary() {
     }
 }
 
+/// # Parser rules
+///
+/// This is the part of the code that dispatches to get the
+/// prefix and infix parsing functions and their precedence
+/// based on the token.
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -258,7 +263,22 @@ ParseRule rules[] = {
   [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
 };
 
-static void parsePrecedence(Precedence precedence) {}
+static void parsePrecedence(Precedence precedence) {
+    advance();
+    ParseFn prefixRule = getRule(parser.previous.type)->prefix;
+    if (prefixRule == NULL) {
+        error("Expect expression.");
+        return;
+    }
+
+    prefixRule();
+
+    while (precedence <= getRule(parser.current.type)->precedence) {
+        advance();
+        ParseFn infixRule = getRule(parser.previous.type)->infix;
+        infixRule();
+    }
+}
 
 static ParseRule* getRule(TokenType type) {
     return &rules[type];
