@@ -3,7 +3,7 @@ use std::{error::Error};
 use rclox::lox::Lox;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let lox = Lox::new();
+    let mut lox = Lox::new();
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() == 0 {

@@ -8,8 +8,12 @@ pub struct Lox {
 
 /// `Clox` uses an enum for error types, we use a Rust enum
 pub enum LoxError {
-    CompileError {},
-    RuntimeError {},
+    CompileError {
+        message: String
+    },
+    RuntimeError {
+        message: String
+    },
 }
 
 impl LoxError {
@@ -31,7 +35,7 @@ impl Lox {
         }
     }
 
-    pub fn repl(&self) -> Result<(), Box<dyn Error>> {
+    pub fn repl(&mut self) -> Result<(), Box<dyn Error>> {
         let lock = std::io::stdin();
         let lock = lock.lock();
 
@@ -47,7 +51,7 @@ impl Lox {
         Ok(())
     }
 
-    pub fn run_file(&self, file_name: &String) -> Result<(), Box<dyn Error>> {
+    pub fn run_file(&mut self, file_name: &String) -> Result<(), Box<dyn Error>> {
         let mut source = String::new();
         File::open(file_name)?.read_to_string(&mut source)?;
 
