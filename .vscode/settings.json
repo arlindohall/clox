@@ -1,6 +1,17 @@
 {
     "files.associations": {
         "istream": "c",
-        "streambuf": "c"
+        "streambuf": "c",
+        "optional": "cpp",
+        "ostream": "cpp",
+        "system_error": "cpp",
+        "array": "cpp",
+        "functional": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "string": "c",
+        "scanner.h": "c",
+        "compiler.h": "c"
     }
 }
