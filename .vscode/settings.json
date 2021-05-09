@@ -12,6 +12,7 @@
         "utility": "cpp",
         "string": "c",
         "scanner.h": "c",
-        "compiler.h": "c"
+        "compiler.h": "c",
+        "value.h": "c"
     }
 }
