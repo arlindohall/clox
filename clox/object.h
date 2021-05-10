@@ -16,8 +16,20 @@ typedef enum {
     OBJ_STRING,
 } ObjType;
 
+// # Obj structure, contains Lox object
+//
+// This structure serves two purposes. First, it is the header of
+// a string or other dynamically typed object, so that we can dereference
+// to the correct type and get the object value. Second, it is a node
+// in a linked list of references to every allocated value in the
+// program, which we can follow in order to perform garbage collection.
+//
+// The linked list is held in the VM, updated in object.c whenever
+// a new object is allocated. Notice it is a singly-linked list and
+// so we use it like a stack.
 struct Obj {
     ObjType type;
+    struct Obj* next;
 };
 
 struct ObjString {

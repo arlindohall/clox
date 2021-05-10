@@ -12,6 +12,8 @@ typedef struct {
     uint8_t* ip;
     Value stack[STACK_MAX];
     Value* stackTop;
+
+    Obj* objects; // Head of the linked list of objects for GC
 } VM;
 
 typedef enum {
@@ -19,6 +21,11 @@ typedef enum {
     INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
+
+// We expose the VM to the outside world so that we can actually
+// view the object list elsewhere in the interpreter. Messy, but
+// effective.
+extern VM vm;
 
 void initVM();
 void freeVM();
