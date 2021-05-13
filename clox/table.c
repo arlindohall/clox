@@ -57,6 +57,20 @@ static void adjustCapacity(Table* table, int capacity) {
     table->capacity = capacity;
 }
 
+// # Insert an item into the table, pass-by-value
+//
+// The set function starts by checking if the table is big enough
+// to fit one more item without being more than 75% full (less then
+// completely full because we'll start to see too many collisions
+// even before it is full). If it's too full, re-size right away
+// and copy every element over. Just like with the growable arrays
+// we rely on the growing factor to smooth out pauses for growing
+// so the average insert time is as if the array was always big enough.
+//
+// Then, we just look through the array at the hash, scanning until
+// we find where the key (string) matches or there is nothing. If
+// there's nothing there yet, we just increment the table size.
+// In both cases, we just overwrite the key and value.
 bool tableSet(Table* table, ObjString* key, Value value) {
     if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
         int capacity = GROW_CAPACITY(table->capacity);
@@ -69,6 +83,22 @@ bool tableSet(Table* table, ObjString* key, Value value) {
     entry->key = key;
     entry->value = value;
     return isNewKey;
+}
+
+// # Get item from table
+//
+// Note that the return value reflects whether the item exists, not
+// the item value itself.
+bool tableGet(Table* table, ObjString* key, Value* value) {
+    // In case the table is null, also optimizes for empty allocated table
+    if (table->count == 0) return false;
+
+    Entry* entry = findEntry(table->entries, table->capacity, key);
+    if (entry->key == NULL) return false;
+
+    // Pass-by-reference by modifying pointer. Unsafe but workable
+    *value = entry->value;
+    return false;
 }
 
 void tableAddAll(Table* from, Table* to) {
