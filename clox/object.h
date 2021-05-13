@@ -36,6 +36,7 @@ struct ObjString {
     Obj obj;
     int length;
     char* chars;
+    uint32_t hash; // Strings keep track of their hash values from creation
 };
 
 ObjString* takeString(char*, int);
