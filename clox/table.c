@@ -47,6 +47,10 @@ static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
     }
 }
 
+// # Increase the size of a hash map
+//
+// Whenever we reach the load factor, call this to allocate new space
+// and then copy each entry over to the new array.
 static void adjustCapacity(Table* table, int capacity) {
     Entry* entries = ALLOCATE(Entry, capacity);
 
@@ -55,6 +59,8 @@ static void adjustCapacity(Table* table, int capacity) {
         entries[i].value = NIL_VAL;
     }
 
+    // Reset the size so we don't copy tombstones
+    table->count = 0;
     for (int i = 0; i < table->capacity; i++) {
         Entry* entry = &table->entries[i];
         if (entry->key == NULL) continue;
@@ -62,6 +68,7 @@ static void adjustCapacity(Table* table, int capacity) {
         Entry* dest = findEntry(entries, capacity, entry->key);
         dest->key = entry->key;
         dest->value = entry->value;
+        table->count++;
     }
 
     FREE_ARRAY(Entry, table->entries, table->capacity);
@@ -90,7 +97,8 @@ bool tableSet(Table* table, ObjString* key, Value value) {
     }
     Entry* entry = findEntry(table->entries, table->capacity, key);
     bool isNewKey = entry->key == NULL;
-    if (isNewKey) table->count++;
+    // Only increment count if we're not writing to a tombstone
+    if (isNewKey && IS_NIL(entry->value)) table->count++;
 
     entry->key = key;
     entry->value = value;
