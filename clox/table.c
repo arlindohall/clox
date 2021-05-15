@@ -22,12 +22,24 @@ void freeTable(Table* table) {
 
 static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
     uint32_t index = key->hash % capacity;
+    Entry* tombstone = NULL;
+
     for (;;) {
         Entry* entry = &entries[index];
-        // Interestingly, we compare the pointers here, so we're checking
-        // if the actual location/identity is the same. I wonder if this
-        // will affect performance later? or maybe behavior?
-        if (entry->key == key || entry->key == NULL) {
+        if (entry->key == NULL) {
+            if (IS_NIL(entry->value)) {
+                // Empty entry--if we found a tombstone previously then
+                // we can fill that value in instead of this one for
+                // writing or I guess for reading, is that a bug?
+                return tombstone != NULL ? tombstone : entry;
+            } else {
+                // We found a tombstone, so set it and keep looking
+                if (tombstone == NULL) tombstone = entry;
+            }
+        } else if (entry->key == key) {
+            // Interestingly, we compare the pointers here, so we're checking
+            // if the actual location/identity is the same. I wonder if this
+            // will affect performance later? or maybe behavior?
             return entry;
         }
 
