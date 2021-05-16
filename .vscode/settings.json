@@ -13,6 +13,8 @@
         "string": "c",
         "scanner.h": "c",
         "compiler.h": "c",
-        "value.h": "c"
+        "value.h": "c",
+        "compare": "c",
+        "ranges": "c"
     }
 }
