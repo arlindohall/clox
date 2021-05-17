@@ -45,6 +45,9 @@ Chunk* compilingChunk;
 
 static void advance();
 static void expression();
+static void statement();
+static void declaration();
+static bool match(TokenType type);
 static void consume(TokenType, const char*);
 static void endCompiler();
 
@@ -63,6 +66,11 @@ static void error(const char*);
 static void errorAtCurrent(const char*);
 static void errorAt(Token*, const char*);
 
+// # Compile
+//
+// This is the entry point for the whole interpreter. Strings of Lox are taken
+// in and converted to code chunks that the VM can operate on. In the process,
+// we also parse constant values to push onto the constants stack.
 bool compile(const char* source, Chunk* chunk) {
     initScanner(source);
     compilingChunk = chunk;
@@ -71,8 +79,11 @@ bool compile(const char* source, Chunk* chunk) {
     parser.hadError = false;
 
     advance();
-    expression();
-    consume(TOKEN_EOF, "Expect end of expression.");
+
+    while (!match(TOKEN_EOF)) {
+        declaration();
+    }
+
     endCompiler();
 
     return !parser.hadError;
@@ -177,8 +188,35 @@ static void consume(TokenType type, const char* message) {
     errorAtCurrent(message);
 }
 
+static bool check(TokenType type) {
+    return parser.current.type == type;
+}
+
+static bool match(TokenType type) {
+    if (!check(type)) return false;
+    advance();
+    return true;
+}
+
 static void expression() {
     parsePrecedence(PREC_ASSIGNMENT);
+}
+
+static void printStatement() {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after value.");
+    emitByte(OP_PRINT);
+}
+
+static void declaration() {
+    statement();
+}
+
+// Var declaration statements to come
+static void statement() {
+    if (match(TOKEN_PRINT)) {
+        printStatement();
+    }
 }
 
 static void number() {
