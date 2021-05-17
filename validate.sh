@@ -30,7 +30,20 @@ function run {
     echo ✅  Done with all tests!
 }
 
+function run_file {
+    file=$1
+
+    build
+    run_test $file
+
+    echo ✅  Done with all tests!
+}
+
 CLOX=build/clox
 export CLOX
 
-run
+if test $1 ; then
+    run_file $1
+else
+    run
+fi
