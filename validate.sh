@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -euxo pipefail
-
 # # All tests
 function all {
     for file in test/*.test.sh; do
@@ -15,7 +13,8 @@ function run_test {
     if bash $file ; then
         echo Done testing $file...
     else
-        echo Failure during $file...
+        echo ❌ Failure during $file...
+        exit 1
     fi
 }
 
@@ -27,6 +26,8 @@ function build {
 function run {
     build
     all
+
+    echo ✅  Done with all tests!
 }
 
 CLOX=build/clox
