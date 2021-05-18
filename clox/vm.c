@@ -19,11 +19,13 @@ void initVM() {
     resetStack();
     vm.objects = NULL;
     initTable(&vm.strings);
+    initTable(&vm.globals);
 }
 
 void freeVM() {
     freeObjects();
     freeTable(&vm.strings);
+    freeTable(&vm.globals);
 }
 
 void push(Value value) {
@@ -96,6 +98,7 @@ InterpretResult interpret(const char* source) {
 
 InterpretResult run() {
 #define READ_BYTE() (*vm.ip++)
+#define READ_STRING() AS_STRING(READ_CONSTANT())
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 
 #define BINARY_OP(valueType, op) \
@@ -132,6 +135,12 @@ InterpretResult run() {
             case OP_TRUE:       push(BOOL_VAL(true)); break;
             case OP_FALSE:      push(BOOL_VAL(false)); break;
             case OP_POP:        pop(); break;
+            case OP_DEFINE_GLOBAL: {
+                ObjString* name = READ_STRING();
+                tableSet(&vm.globals, name, peek(0));
+                pop();
+                break;
+            }
             case OP_EQUAL: {
                 Value b = pop();
                 Value a = pop();
@@ -176,5 +185,6 @@ InterpretResult run() {
 
 #undef BINARY_OP
 #undef READ_CONSTANT
+#undef READ_STRING
 #undef READ_BYTE
 }

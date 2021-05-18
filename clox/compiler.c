@@ -33,6 +33,15 @@ typedef enum {
 
 typedef void (*ParseFn)();
 
+// # A single row in the parse table
+//
+// This struct stores the rules for each kind of token in
+// the langauge. A key thing to note is that `prefix` stores
+// the rules for literals like strings and numbers as well as
+// prefix operators like negative. There are two columns, prefix
+// and infix, for operators like `-` that can be both, and we
+// decide which one to use based on whether we just started a
+// new expression or we are in the middle of an expression.
 typedef struct {
     ParseFn prefix;
     ParseFn infix;
@@ -54,6 +63,9 @@ static void endCompiler();
 static void emitReturn();
 static void emitByte(uint8_t);
 static void emitBytes(uint8_t, uint8_t);
+
+static uint8_t parseVariable(const char*);
+static void defineVariable(uint8_t);
 
 static uint8_t makeConstant(Value);
 
@@ -202,6 +214,20 @@ static void expression() {
     parsePrecedence(PREC_ASSIGNMENT);
 }
 
+static void varDeclaration() {
+    uint8_t global = parseVariable("Expect variable name.");
+
+    if (match(TOKEN_EQUAL)) {
+        expression();
+    } else {
+        emitByte(OP_NIL);
+    }
+    consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
+
+    // Variables are defined by their index in the constant pool
+    defineVariable(global);
+}
+
 static void expressionStatement() {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
@@ -238,7 +264,11 @@ static void synchronize() {
 }
 
 static void declaration() {
-    statement();
+    if (match(TOKEN_VAR)) {
+        varDeclaration();
+    } else {
+        statement();
+    }
 
     if (parser.panicMode) synchronize();
 }
@@ -345,7 +375,7 @@ ParseRule rules[] = {
   [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_STRING]        = {string,     NULL,   PREC_NONE},
+  [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
@@ -369,6 +399,10 @@ ParseRule rules[] = {
 
 static void parsePrecedence(Precedence precedence) {
     advance();
+
+    // We call `getRule(...)->prefix` only when we first enter the
+    // parsePrecedence function because it takes anything that is
+    // the beginning of an expression, including literals.
     ParseFn prefixRule = getRule(parser.previous.type)->prefix;
     if (prefixRule == NULL) {
         error("Expect expression.");
@@ -377,11 +411,40 @@ static void parsePrecedence(Precedence precedence) {
 
     prefixRule();
 
+    // We search for `getRule(...)->infix` later because we have to
+    // have already parsed a full expression to get to an infix
+    // operator. If we don't find any, we just quit.
+    //
+    // We also rely on the precedence of the previous rule to
+    // determine whether to fully parse this operator yet, or to
+    // just keep searching.
     while (precedence <= getRule(parser.current.type)->precedence) {
         advance();
         ParseFn infixRule = getRule(parser.previous.type)->infix;
         infixRule();
     }
+}
+
+// # Create a global variable name constant
+//
+// Because global variables are looked up by name at runtime, we
+// need to track variable names as constants. This could be an issue
+// if we have a lot of global variables, we'll start ot eat into
+// the constant storage. Maybe we'll revisit this?
+static uint8_t identifierConstant(Token* name) {
+    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
+
+static uint8_t parseVariable(const char* errorMessage) {
+    consume(TOKEN_IDENTIFIER, errorMessage);
+    return identifierConstant(&parser.previous);
+}
+
+static void defineVariable(uint8_t global) {
+    // Pushes the the value at the top of the stack to the
+    // globals variable named by the constant pool location ref'ed
+    // by `global`
+    emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
 static ParseRule* getRule(TokenType type) {

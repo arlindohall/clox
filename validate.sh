@@ -10,11 +10,11 @@ function all {
 function run_test {
     file=$1
     echo Testing $file...
-    if bash $file ; then
+    if $file ; then
         echo Done testing $file...
     else
         echo ❌ Failure during $file...
-        exit 1
+        exit 2
     fi
 }
 
@@ -33,7 +33,10 @@ function run {
 function run_file {
     file=$1
 
-    build
+    if ! build ; then
+        echo ❌ Failure during build...
+        exit 1
+    fi
     run_test $file
 
     echo ✅  Done with all tests!

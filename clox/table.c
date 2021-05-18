@@ -170,5 +170,10 @@ ObjString* tableFindString(Table* table, const char* chars, int length,
             // We found it.
             return entry->key;
         }
+
+        // I made a silly mistake and left this off at first---
+        // don't do that, it will cause infinite loops on every
+        // collision
+        index = (index + 1) % table->capacity;
     }
 }
