@@ -54,6 +54,7 @@
         "sstream": "cpp",
         "stdexcept": "cpp",
         "cstdbool": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "debug.h": "c"
     }
 }

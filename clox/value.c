@@ -28,6 +28,14 @@ void freeValueArray(ValueArray* array) {
     initValueArray(array);
 }
 
+void printValueArray(ValueArray* array) {
+    for (int i = 0; i < array->count; i++) {
+        printf("=>Value(index=%d,value=", i);
+        printValue(array->values[i]);
+        printf(")\n");
+    }
+}
+
 void printValue(Value value) {
     switch (value.type) {
         case VAL_BOOL:      printf(AS_BOOL(value) ? "true" : "false"); break;

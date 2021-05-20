@@ -18,5 +18,16 @@ print breakfast;
 EOF
 }
 
-test_create_and_read_global_variable
-test_create_and_print_global_variable
+function test_create_set_and_print {
+    $CLOX << EOF
+var breakfast = "beignets";
+var beverage = "cafe au lait";
+breakfast = "beignets with " + beverage;
+
+print breakfast + "!";
+EOF
+}
+
+# test_create_and_read_global_variable
+# test_create_and_print_global_variable
+test_create_set_and_print

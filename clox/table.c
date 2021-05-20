@@ -1,4 +1,5 @@
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -137,6 +138,26 @@ bool tableDelete(Table* table, ObjString* key) {
     entry->value = BOOL_VAL(true);
 
     return true;
+}
+
+// # Print table contents
+//
+// For debugging purposes to peek into table
+void tablePrint(Table* table) {
+    for (int i = 0; i < table->capacity; i++) {
+        Entry* entry = &table->entries[i];
+        if (entry->key == NULL && IS_NIL(entry->value)) {
+            // Nothing, continue
+            continue;
+        } else if (entry->key == NULL) {
+            // Tombstone
+            printf("=>Tombstone(hash=%d)\n", i);
+        } else {
+            printf("=>Entry(hash=%d,key=%s,value=", i, entry->key->chars);
+            printValue(entry->value);
+            printf(")\n");
+        }
+    }
 }
 
 void tableAddAll(Table* from, Table* to) {

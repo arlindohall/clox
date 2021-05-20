@@ -2,6 +2,8 @@
 #include <stdio.h>
 
 #include "debug.h"
+#include "table.h"
+#include "vm.h"
 #include "value.h"
 
 static int simpleInstruction(const char*, int);
@@ -13,6 +15,15 @@ void disassembleChunk(Chunk* chunk, const char* name) {
     for (int offset = 0; offset < chunk->count;) {
         offset = disassembleInstruction(chunk, offset);
     }
+
+#ifdef DEBUG_PRINT_MEMORY
+    printf("= %s/globals =\n", name);
+    tablePrint(&vm.globals);
+    printf("= %s/strings =\n", name);
+    tablePrint(&vm.strings);
+    printf("= %s/constants =\n", name);
+    printValueArray(&chunk->constants);
+#endif
 }
 
 int disassembleInstruction(Chunk* chunk, int offset) {
@@ -55,6 +66,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return constantInstruction("OP_GET_GLOBAL", chunk, offset);
         case OP_DEFINE_GLOBAL:
             return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+        case OP_SET_GLOBAL:
+            return constantInstruction("OP_SET_GLOBAL", chunk, offset);
         case OP_EQUAL:
             return simpleInstruction("OP_EQUAL", offset);
         case OP_GREATER:
