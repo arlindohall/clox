@@ -5,6 +5,10 @@ function all {
     for file in test/*.test.sh; do
         run_test $file
     done
+
+    for file in test/*.test.lox; do
+        run_lox $file
+    done
 }
 
 function run_test {
@@ -15,6 +19,17 @@ function run_test {
     else
         echo ❌ Failure during $file...
         exit 2
+    fi
+}
+
+function run_lox {
+    file=$1
+    echo Testing lox script $file
+    if $CLOX $1 ; then
+        echo Done testing $file...
+    else
+        echo ❌ Failure during $file...
+        exit 3
     fi
 }
 
@@ -37,7 +52,12 @@ function run_file {
         echo ❌ Failure during build...
         exit 1
     fi
-    run_test $file
+
+    if [[ $file =~ .*test.lox ]] ; then
+        run_lox $file
+    else
+        run_test $file
+    fi
 
     echo ✅  Done with all tests!
 }
