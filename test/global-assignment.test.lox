@@ -1,0 +1,12 @@
+var breakfast = "beignets";
+var beverage = "cafe au lait";
+
+assert breakfast == "beignets";
+assert beverage == "cafe au lait";
+
+breakfast = "beignets with " + beverage;
+
+print breakfast;
+
+assert breakfast == "beignets with cafe au lait";
+assert beverage == "cafe au lait";
