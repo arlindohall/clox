@@ -28,6 +28,6 @@ print breakfast + "!";
 EOF
 }
 
-# test_create_and_read_global_variable
-# test_create_and_print_global_variable
+test_create_and_read_global_variable
+test_create_and_print_global_variable
 test_create_set_and_print
