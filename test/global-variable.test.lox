@@ -1,0 +1,17 @@
+
+// Create a global variable
+var my_global1 = "hello";
+var my_global2 = 1 + 2;
+var my_global3;
+
+// Print global variable
+var beverage = "cafe au lait";
+var breakfast = "beignets with " + beverage;
+print breakfast;
+
+// Print global plus modification
+var breakfast = "beignets";
+var beverage = "cafe au lait";
+breakfast = "beignets with " + beverage;
+
+print breakfast + "!";

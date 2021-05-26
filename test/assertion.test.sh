@@ -2,12 +2,10 @@
 
 set -euxo pipefail
 
+. test/helpers.sh
+
 function test_assertions_fail {
-    if $CLOX test/failure-scripts/assert-fail.lox ; then
-        exit 1 # Failure
-    else
-        echo Assertions work as expected return=$?
-    fi
+    assert_fails test/failure-scripts/assert-fail.lox "Assertions work as expected return=$?"
 }
 
 test_assertions_fail

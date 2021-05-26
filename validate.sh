@@ -13,9 +13,9 @@ function all {
 
 function run_test {
     file=$1
-    echo Testing $file...
+    echo === Testing $file ===
     if $file ; then
-        echo Done testing $file...
+        echo === Done testing $file ===
     else
         echo ❌ Failure during $file...
         exit 2
@@ -24,9 +24,9 @@ function run_test {
 
 function run_lox {
     file=$1
-    echo Testing lox script $file
+    echo === Testing lox script $file
     if $CLOX $1 ; then
-        echo Done testing $file...
+        echo === Done testing $file ===
     else
         echo ❌ Failure during $file...
         exit 3
