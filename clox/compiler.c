@@ -241,12 +241,19 @@ static void printStatement() {
     emitByte(OP_PRINT);
 }
 
+static void assertStatement() {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after assertion.");
+    emitByte(OP_ASSERT);
+}
+
 static void synchronize() {
     parser.panicMode = false;
 
     while (parser.current.type != TOKEN_EOF) {
         if (parser.previous.type == TOKEN_SEMICOLON) return;
         switch (parser.current.type) {
+            case TOKEN_ASSERT:
             case TOKEN_CLASS:
             case TOKEN_FUN:
             case TOKEN_VAR:
@@ -278,6 +285,8 @@ static void declaration() {
 static void statement() {
     if (match(TOKEN_PRINT)) {
         printStatement();
+    } else if (match(TOKEN_ASSERT)) {
+        assertStatement();
     } else {
         expressionStatement();
     }
@@ -402,6 +411,7 @@ ParseRule rules[] = {
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
   [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_ASSERT]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},

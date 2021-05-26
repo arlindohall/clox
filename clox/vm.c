@@ -193,6 +193,16 @@ InterpretResult run() {
 
                 push(NUMBER_VAL(-AS_NUMBER(pop())));
                 break;
+            case OP_ASSERT: {
+                Value value = pop();
+                if (isFalsey(value)) {
+                    printf("Assertion failure: ");
+                    printValue(value);
+                    printf("\n");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
             case OP_PRINT:
                 printValue(pop());
                 printf("\n");
