@@ -48,10 +48,34 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-Parser parser;
+// # The struct that tracks local variables in scope
+//
+// The compiler struct tracks the local variables, the depth of the
+// current scope, and the number of locals we currently have. This
+// is opposed to tracking a linked list/stack of hash maps in jlox.
+// (https://github.com/arlindohall/rlox/blob/main/src/interpreter.rs#L34) 
+//
+// Internal type of Local is a name and a resolution depth
+typedef struct {
+    Token name;
+    int depth;
+} Local;
 
+typedef struct {
+    Local locals[UINT8_COUNT];
+    int localCount;
+    int scopeDepth;
+} Compiler;
+
+// We could initialize these in the language runtime, and then pass each
+// reference into the calling funciton. That would allow us to have
+// multiple threads with separate memory. It would also require a
+// refactor that I (and the book) don't want to do.
+Parser parser;
+Compiler* current = NULL;
 Chunk* compilingChunk;
 
+static void initCompiler(Compiler*);
 static void advance();
 static void expression();
 static void statement();
@@ -86,6 +110,8 @@ static void errorAt(Token*, const char*);
 // we also parse constant values to push onto the constants stack.
 bool compile(const char* source, Chunk* chunk) {
     initScanner(source);
+    Compiler compiler;
+    initCompiler(&compiler);
     compilingChunk = chunk;
 
     parser.hadError = false;
@@ -164,6 +190,12 @@ static void emitReturn() {
 
 static void emitConstant(Value value) {
     emitBytes(OP_CONSTANT, makeConstant(value));
+}
+
+static void initCompiler(Compiler* compiler) {
+    compiler->localCount = 0;
+    compiler->scopeDepth = 0;
+    current = compiler;
 }
 
 static uint8_t makeConstant(Value value) {
