@@ -1,10 +1,11 @@
 
 function assert_fails {
     file=$1
-    message=$2
-    if $CLOX $1 ; then
-        exit 1 # Failure
+    code=$2
+    $CLOX $file || \
+    if test $? = $code ; then
+        echo === Test $file exited with expected code $code ===
     else
-        echo $2
+        exit 1 # Failure
     fi
 }

@@ -24,7 +24,7 @@ function run_test {
 
 function run_lox {
     file=$1
-    echo === Testing lox script $file
+    echo === Testing lox script $file ===
     if $CLOX $1 ; then
         echo === Done testing $file ===
     else

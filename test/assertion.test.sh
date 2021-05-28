@@ -7,7 +7,7 @@ set -euxo pipefail
 function test_assertions_fail {
     assert_fails \
         test/failure-scripts/assert-fail.lox \
-        "Assertions work as expected return=$?"
+        70
 }
 
 test_assertions_fail
