@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -247,6 +248,37 @@ static void expression() {
     parsePrecedence(PREC_ASSIGNMENT);
 }
 
+
+// # Block statements
+//
+// Blocks just execute the contained statements in order. The
+// interesting (while simple) bit is the scope functions below.
+// In jlox, we popped or added scopes to a stack, but here we
+// just track the scope level and have variables track their
+// own depth. So creating or closing a scope just means updating
+// the tracked scope depth, an integer.
+static void block() {
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        declaration();
+    }
+
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+
+static void beginScope() {
+    current->scopeDepth++;
+}
+
+static void endScope() {
+    current->scopeDepth--;
+
+    while (current->localCount > 0 &&
+            current->locals[current->localCount - 1].depth > current->scopeDepth) {
+        emitByte(OP_POP);
+        current->localCount--;
+    }
+}
+
 static void varDeclaration() {
     uint8_t global = parseVariable("Expect variable name.");
 
@@ -319,6 +351,10 @@ static void statement() {
         printStatement();
     } else if (match(TOKEN_ASSERT)) {
         assertStatement();
+    } else if (match(TOKEN_LEFT_BRACE)) {
+        beginScope();
+        block();
+        endScope();
     } else {
         expressionStatement();
     }
@@ -498,12 +534,67 @@ static uint8_t identifierConstant(Token* name) {
     return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
 }
 
+static void addLocal(Token name) {
+    if (current->localCount == UINT8_COUNT) {
+        error("Too many local variables in function.");
+        return;
+    }
+
+    Local* local = &current->locals[current->localCount++];
+    // Fine to use the name because it comes form the source chunk.
+    // Once the compiling is done, we don't need the tokens anymore,
+    // unless we build some kind of stack tracing in. Therefore it's
+    // okay to drop them then and depend on them before we drop them
+    // (them being the source names).
+    local->name = name;
+    local->depth = current->scopeDepth;
+}
+
+// # Check if two variables have the same name
+//
+// Don't just use the interned string compare because we haven't
+// interned these strings
+static bool identifierEquals(Token* a, Token* b) {
+    if (a->length != b->length) return false; // Quick check and bail
+    return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static void declareVariable() {
+    if (current->scopeDepth == 0) return; // Global variable
+
+    Token* name = &parser.previous;
+    for (int i = current->localCount - 1; i >= 0; i--) {
+        Local* local = &current->locals[i];
+        if (local->depth != UNINITIALIZED_SENTINEL_DEPTH &&
+                local->depth < current->scopeDepth) {
+            // This is from the parent scope, so stop
+            break;
+        }
+
+        if (identifierEquals(name, &local->name)) {
+            error("Already variable with this name in this scope.");
+        }
+    }
+    addLocal(*name);
+}
+
 static uint8_t parseVariable(const char* errorMessage) {
     consume(TOKEN_IDENTIFIER, errorMessage);
+
+    declareVariable();
+    if (current->scopeDepth > 0) return 0;
+
     return identifierConstant(&parser.previous);
 }
 
 static void defineVariable(uint8_t global) {
+    if (current->scopeDepth > 0) {
+        // It's a local variable, and we don't have to put the
+        // value anywehre. This is pretty cool! We can just use
+        // the value we pushed to the stack!
+        return;
+    }
+
     // Pushes the the value at the top of the stack to the
     // globals variable named by the constant pool location ref'ed
     // by `global`
