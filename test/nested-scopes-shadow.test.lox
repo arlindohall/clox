@@ -1,0 +1,10 @@
+{
+  var a = "outer";
+  assert a == "outer";
+  {
+    assert a == "outer";
+    var a = "inner";
+    assert a == "inner";
+  }
+  assert a == "outer";
+}

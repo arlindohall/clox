@@ -94,6 +94,7 @@ static void defineVariable(uint8_t);
 
 static uint8_t makeConstant(Value);
 static uint8_t identifierConstant(Token*);
+static bool identifiersEqual(Token*, Token*);
 
 static void parsePrecedence(Precedence);
 static ParseRule* getRule(TokenType);
@@ -370,14 +371,41 @@ static void string(bool canAssign) {
                                     parser.previous.length - 2)));
 }
 
+// Helper only used by namedVariable
+static int resolveLocal(Compiler* compiler, Token* name) {
+    for (int i = compiler->localCount - 1; i >= 0; i--) {
+        // Check each local variable (item on stack)
+        Local* local = &compiler->locals[i];
+        if (identifiersEqual(name, &local->name)) {
+            return i;
+        }
+    }
+
+    // Return the same value as if the local was uninitialized.
+    // Note that this means not initializing a local variable
+    // but then referencing it by name is treated as a global
+    // variable, instead of an initialization error.
+    return UNINITIALIZED_SENTINEL_DEPTH;
+}
+
 static void namedVariable(Token name, bool canAssign) {
-    uint8_t arg = identifierConstant(&name);
+    uint8_t getOp, setOp;
+    int arg = resolveLocal(current, &name);
+    if (arg != UNINITIALIZED_SENTINEL_DEPTH) {
+        // Local variable exists and is initialized
+        getOp = OP_GET_LOCAL;
+        setOp = OP_SET_LOCAL;
+    } else {
+        arg = identifierConstant(&name);
+        getOp = OP_GET_GLOBAL;
+        setOp = OP_SET_GLOBAL;
+    }
 
     if (canAssign && match(TOKEN_EQUAL)) {
         expression();
-        emitBytes(OP_SET_GLOBAL, arg);
+        emitBytes(setOp, arg);
     } else {
-        emitBytes(OP_GET_GLOBAL, arg);
+        emitBytes(getOp, arg);
     }
 }
 
@@ -554,7 +582,7 @@ static void addLocal(Token name) {
 //
 // Don't just use the interned string compare because we haven't
 // interned these strings
-static bool identifierEquals(Token* a, Token* b) {
+static bool identifiersEqual(Token* a, Token* b) {
     if (a->length != b->length) return false; // Quick check and bail
     return memcmp(a->start, b->start, a->length) == 0;
 }
@@ -571,7 +599,7 @@ static void declareVariable() {
             break;
         }
 
-        if (identifierEquals(name, &local->name)) {
+        if (identifiersEqual(name, &local->name)) {
             error("Already variable with this name in this scope.");
         }
     }
