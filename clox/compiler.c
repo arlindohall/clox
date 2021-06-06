@@ -377,14 +377,18 @@ static int resolveLocal(Compiler* compiler, Token* name) {
         // Check each local variable (item on stack)
         Local* local = &compiler->locals[i];
         if (identifiersEqual(name, &local->name)) {
+            if (local->depth == UNINITIALIZED_SENTINEL_DEPTH) {
+                error("Can't read local variable in its own initializer");
+            }
             return i;
         }
     }
 
     // Return the same value as if the local was uninitialized.
     // Note that this means not initializing a local variable
-    // but then referencing it by name is treated as a global
-    // variable, instead of an initialization error.
+    // but then referencing it by name is only distinguished from
+    // a reference to a global variable by whether an error was
+    // reported above during resolution.
     return UNINITIALIZED_SENTINEL_DEPTH;
 }
 
@@ -575,7 +579,7 @@ static void addLocal(Token name) {
     // okay to drop them then and depend on them before we drop them
     // (them being the source names).
     local->name = name;
-    local->depth = current->scopeDepth;
+    local->depth = UNINITIALIZED_SENTINEL_DEPTH;
 }
 
 // # Check if two variables have the same name
@@ -615,11 +619,17 @@ static uint8_t parseVariable(const char* errorMessage) {
     return identifierConstant(&parser.previous);
 }
 
+static void markInitialized() {
+    current->locals[current->localCount - 1].depth =
+            current->scopeDepth;
+}
+
 static void defineVariable(uint8_t global) {
     if (current->scopeDepth > 0) {
         // It's a local variable, and we don't have to put the
         // value anywehre. This is pretty cool! We can just use
         // the value we pushed to the stack!
+        markInitialized();
         return;
     }
 

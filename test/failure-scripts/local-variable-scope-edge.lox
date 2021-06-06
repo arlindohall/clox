@@ -1,0 +1,9 @@
+{
+  var a = "outer";
+  assert a == "outer";
+  {
+    assert a == "outer";
+    var a = a;
+    assert a == "outer";
+  }
+}
