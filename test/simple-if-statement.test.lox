@@ -1,0 +1,12 @@
+
+// Bare if with simple boolean
+var check = false;
+if (true) {
+    print "Inside if statement";
+    check = true;
+}
+assert check;
+
+if (false) {
+    assert false;
+}

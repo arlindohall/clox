@@ -98,6 +98,8 @@ InterpretResult interpret(const char* source) {
 
 InterpretResult run() {
 #define READ_BYTE() (*vm.ip++)
+#define READ_SHORT() \
+    (vm.ip += 2, (uint16_t)((vm.ip[-2] << 8) | vm.ip[-1]))
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 
@@ -217,6 +219,15 @@ InterpretResult run() {
                 printValue(pop());
                 printf("\n");
                 break;
+            case OP_JUMP_IF_FALSE: {
+                uint16_t offset = READ_SHORT();
+                if (isFalsey(peek(0))) vm.ip += offset;
+                // Note, we'll have to clean up (`pop()`) the
+                // condition value we pushed when evaluating the
+                // expression we `peek` at here, see `ifStatement`
+                // in the compiler.
+                break;
+            }
             case OP_RETURN: {
                 // Exit interpreter
                 return INTERPRET_OK;
@@ -228,4 +239,5 @@ InterpretResult run() {
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef READ_BYTE
+#undef READ_SHORT
 }
