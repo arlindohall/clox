@@ -219,13 +219,14 @@ InterpretResult run() {
                 printValue(pop());
                 printf("\n");
                 break;
+            case OP_JUMP: {
+                uint16_t offset = READ_SHORT();
+                vm.ip += offset;
+                break;
+            }
             case OP_JUMP_IF_FALSE: {
                 uint16_t offset = READ_SHORT();
                 if (isFalsey(peek(0))) vm.ip += offset;
-                // Note, we'll have to clean up (`pop()`) the
-                // condition value we pushed when evaluating the
-                // expression we `peek` at here, see `ifStatement`
-                // in the compiler.
                 break;
             }
             case OP_RETURN: {

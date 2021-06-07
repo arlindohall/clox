@@ -1,12 +1,20 @@
 
 // Bare if with simple boolean
-var check = false;
+var check1 = false;
+var check2 = false;
 if (true) {
     print "Inside if statement";
-    check = true;
+    check1 = true;
+} else {
+    assert false;
 }
-assert check;
 
 if (false) {
     assert false;
+} else {
+    print "Inside second if statement";
+    check2 = true;
 }
+
+assert check1;
+assert check2;
