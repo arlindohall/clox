@@ -1,0 +1,18 @@
+
+var a = true;
+var b = true;
+var c = false;
+
+
+assert a and b;
+
+// Short circuit the assignment
+assert !(c and (a = false));
+
+assert a;
+
+// Short circuit the second assignment
+assert !((a = false) and (b = false));
+
+assert !a;
+assert b;

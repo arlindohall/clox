@@ -518,6 +518,20 @@ static void literal(bool canAssign) {
     }
 }
 
+static void and_(bool canAssign) {
+    int endJump = emitJump(OP_JUMP_IF_FALSE);
+
+    // Pop the previous expression if it was false and
+    // keep evaluating the rest of the expressions.
+    emitByte(OP_POP);
+    // Now evaluate the rest of the expression, possible
+    // including more and expressions, before we finally
+    // mark the point we're jumping to.
+    parsePrecedence(PREC_AND);
+
+    patchJump(endJump);
+}
+
 /// # Parser rules
 ///
 /// This is the part of the code that dispatches to get the
@@ -546,7 +560,7 @@ ParseRule rules[] = {
   [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
