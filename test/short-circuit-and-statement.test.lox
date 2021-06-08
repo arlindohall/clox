@@ -16,3 +16,21 @@ assert !((a = false) and (b = false));
 
 assert !a;
 assert b;
+
+// Now redo the above but the dual to test `or`
+a = false;
+b = false;
+c = true;
+
+assert !(a or b);
+
+// Short circuit the assignment
+assert (c or (a = true));
+
+assert !a;
+
+// Short circuit the second assignment
+assert ((a = true) or (b = true));
+
+assert a;
+assert !b;

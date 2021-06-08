@@ -532,6 +532,29 @@ static void and_(bool canAssign) {
     patchJump(endJump);
 }
 
+static void or_(bool canAssign) {
+    // 1. We emit two jumps. The first is only triggered
+    // if the prev value was false, and jumps to (2). The second
+    // is triggered if the prev value was true, and jumps
+    // to (3)
+    int elseJump = emitJump(OP_JUMP_IF_FALSE);
+    int endJump = emitJump(OP_JUMP);
+
+    // 2. The first jump goes here, if the value was false,
+    // we pop it and keep looking for false values with the
+    // parse precedence below
+    patchJump(elseJump);
+    emitByte(OP_POP);
+
+    parsePrecedence(PREC_OR);
+    // 3. We jump past the parse precedence so we don't
+    // evaluate more expressions if the value was true.
+    // Here, we're not going to pop because either a function
+    // call or print statement will use the value, or an
+    // expression statement will drop it.
+    patchJump(endJump);
+}
+
 /// # Parser rules
 ///
 /// This is the part of the code that dispatches to get the
@@ -568,7 +591,7 @@ ParseRule rules[] = {
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
-  [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
   [TOKEN_ASSERT]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
