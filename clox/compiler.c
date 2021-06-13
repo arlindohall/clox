@@ -369,6 +369,18 @@ static void whileStatement() {
     emitByte(OP_POP);
 }
 
+static void forStatement() {
+    consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
+    consume(TOKEN_SEMICOLON, "Expect ';'.");
+
+    int loopStart = currentChunk()->count;
+    consume(TOKEN_SEMICOLON, "Expect ';'.");
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+
+    statement();
+    emitLoop(loopStart);
+}
+
 static void printStatement() {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after value.");
@@ -421,6 +433,8 @@ static void statement() {
         printStatement();
     } else if (match(TOKEN_ASSERT)) {
         assertStatement();
+    } else if (match(TOKEN_FOR)) {
+        forStatement();
     } else if (match(TOKEN_IF)) {
         ifStatement();
     } else if (match(TOKEN_WHILE)) {
