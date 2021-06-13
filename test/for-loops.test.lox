@@ -1,0 +1,19 @@
+
+// Simplest terminating loop
+// Check that x is shadowed, y is set to last x value
+var y;
+var x = 100;
+
+for (
+    var x = 0;
+    x < 1;
+    // No update condition
+) {
+    assert x < 1;
+    x = x + 1;
+    y = x;
+    assert x == 1;
+}
+
+assert y == 1;
+assert x == 100;
