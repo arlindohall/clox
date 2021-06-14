@@ -17,3 +17,22 @@ for (
 
 assert y == 1;
 assert x == 100;
+
+
+// Now do the same thing but with the increment
+var b;
+var a = 100;
+
+for (
+    var a = 0;
+    a < 1;
+    // We have to increment and set b in order to
+    // make the same check that is made in the first
+    // example
+    (a = a + 1) and (b = a)
+) {
+    assert a < 1;
+}
+
+assert b == 1;
+assert a == 100;

@@ -391,7 +391,23 @@ static void forStatement() {
         emitByte(OP_POP); // Drop the condition if it was true
     }
 
-    consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+    if (!match(TOKEN_RIGHT_PAREN)) {
+        // Skip the increment code, go directly to the body
+        // but keep track of the increment
+        int bodyJump = emitJump(OP_JUMP);
+        int incrementStart = currentChunk()->count;
+        // Perform the increment (we jump back here later)
+        expression();
+        emitByte(OP_POP);
+        consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.");
+
+        // Increment is the last thing before jumping back to
+        // the start of the loop.
+        emitLoop(loopStart);
+        loopStart = incrementStart;
+        // Patch here because the next thing is the loop body
+        patchJump(bodyJump);
+    }
 
     statement();
     emitLoop(loopStart);
