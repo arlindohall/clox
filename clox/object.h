@@ -3,16 +3,20 @@
 #define clox_object_h
 
 #include "common.h"
+#include "chunk.h"
 #include "value.h"
 
 #define OBJ_TYPE(value)         (AS_OBJ(value)->type)
 
+#define IS_FUNCTION(value)      isObjType((value), OBJ_FUNCTION)
 #define IS_STRING(value)        isObjType((value), OBJ_STRING)
 
+#define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
 
 typedef enum {
+    OBJ_FUNCTION,
     OBJ_STRING,
 } ObjType;
 
@@ -32,6 +36,21 @@ struct Obj {
     struct Obj* next;
 };
 
+// # Function
+//
+// A function contains its own chunk of bytecode rather than
+// building into the parent chunk. This works because we can
+// keep all of the code separate and inspect functions in
+// a more modular way.
+typedef struct {
+    // Functions are first class so they have to start with Obj
+    Obj obj;
+    int arity;
+    Chunk chunk;
+    // Just for error reporting
+    ObjString* name;
+} ObjFunction;
+
 struct ObjString {
     Obj obj;
     int length;
@@ -39,6 +58,7 @@ struct ObjString {
     uint32_t hash; // Strings keep track of their hash values from creation
 };
 
+ObjFunction* newFunction();
 ObjString* takeString(char*, int);
 ObjString* copyString(const char* chars, int length);
 void printObject(Value value);
