@@ -62,7 +62,15 @@ typedef struct {
     int depth;
 } Local;
 
+typedef enum {
+    TYPE_FUNCTION,
+    TYPE_SCRIPT
+} FunctionType;
+
 typedef struct {
+    ObjFunction* function;
+    FunctionType type;
+
     Local locals[UINT8_COUNT];
     int localCount;
     int scopeDepth;
@@ -74,16 +82,15 @@ typedef struct {
 // refactor that I (and the book) don't want to do.
 Parser parser;
 Compiler* current = NULL;
-Chunk* compilingChunk;
 
-static void initCompiler(Compiler*);
+static void initCompiler(Compiler*, FunctionType);
 static void advance();
 static void expression();
 static void statement();
 static void declaration();
 static bool match(TokenType type);
 static void consume(TokenType, const char*);
-static void endCompiler();
+static ObjFunction* endCompiler();
 
 static void emitReturn();
 static void emitByte(uint8_t);
@@ -110,11 +117,10 @@ static void errorAt(Token*, const char*);
 // This is the entry point for the whole interpreter. Strings of Lox are taken
 // in and converted to code chunks that the VM can operate on. In the process,
 // we also parse constant values to push onto the constants stack.
-bool compile(const char* source, Chunk* chunk) {
+ObjFunction* compile(const char* source, Chunk* chunk) {
     initScanner(source);
     Compiler compiler;
-    initCompiler(&compiler);
-    compilingChunk = chunk;
+    initCompiler(&compiler, TYPE_SCRIPT);
 
     parser.hadError = false;
     parser.hadError = false;
@@ -125,9 +131,9 @@ bool compile(const char* source, Chunk* chunk) {
         declaration();
     }
 
-    endCompiler();
+    ObjFunction* function = endCompiler();
 
-    return !parser.hadError;
+    return parser.hadError ? NULL : function;
 }
 
 /// # Error handling
@@ -208,16 +214,22 @@ static void patchJump(int offset) {
 }
 
 static Chunk* currentChunk() {
-    return compilingChunk;
+    return &current->function->chunk;
 }
 
-static void endCompiler() {
+static ObjFunction* endCompiler() {
     emitReturn();
+    ObjFunction* function = current->function;
 #ifdef DEBUG_PRINT_CODE
     if (!parser.hadError) {
-        disassembleChunk(currentChunk(), "code");
+        disassembleChunk(
+            currentChunk(),
+            function->name != NULL ? function->name->chars : "<script>"
+        );
     }
 #endif
+
+    return function;
 }
 
 static void emitReturn() {
@@ -228,10 +240,18 @@ static void emitConstant(Value value) {
     emitBytes(OP_CONSTANT, makeConstant(value));
 }
 
-static void initCompiler(Compiler* compiler) {
+static void initCompiler(Compiler* compiler, FunctionType type) {
+    compiler->function = NULL;
+    compiler->type = type;
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
+    compiler->function = newFunction();
     current = compiler;
+
+    Local* local = &current->locals[current->localCount++];
+    local->depth = 0;
+    local->name.start = "";
+    local->name.length = 0;
 }
 
 static uint8_t makeConstant(Value value) {
