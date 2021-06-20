@@ -3,14 +3,30 @@
 #define clox_vm_h
 
 #include "chunk.h"
+#include "object.h"
 #include "table.h"
 #include "value.h"
 
-#define STACK_MAX 256
+#define FRAMES_MAX 64
+#define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
 
 typedef struct {
-    Chunk* chunk;
+    ObjFunction* function;
     uint8_t* ip;
+    Value* slots;
+} CallFrame;
+
+typedef struct {
+    // The VM doesn't point directly to the top level chunk, but
+    // instead points to all the call frames, which each point
+    // to their own chunk (function, including top-level "script"
+    // type functions).
+    //
+    // We also keep track of how many frames we've used so we can
+    // error on overflow.
+    CallFrame frames[FRAMES_MAX];
+    int frameCount;
+
     Value stack[STACK_MAX];
     Value* stackTop;
     Table globals;

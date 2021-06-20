@@ -117,7 +117,7 @@ static void errorAt(Token*, const char*);
 // This is the entry point for the whole interpreter. Strings of Lox are taken
 // in and converted to code chunks that the VM can operate on. In the process,
 // we also parse constant values to push onto the constants stack.
-ObjFunction* compile(const char* source, Chunk* chunk) {
+ObjFunction* compile(const char* source) {
     initScanner(source);
     Compiler compiler;
     initCompiler(&compiler, TYPE_SCRIPT);
