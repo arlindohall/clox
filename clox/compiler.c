@@ -11,6 +11,18 @@
 #include "debug.h"
 #endif
 
+// # Data structures
+
+// ## Parser
+//
+// Main data structure of the compiler (which the book stresses
+// is really just a parser that outputs bytecode instead of
+// syntax trees).
+//
+// Contains a pointer to the current and last tokens in the
+// scanned source text for convenience. Also tracks whether
+// there has ever been a compiler error or we are currently
+// panicing and trying to recover.
 typedef struct {
     Token current;
     Token previous;
@@ -18,6 +30,14 @@ typedef struct {
     bool panicMode;
 } Parser;
 
+// Precedences are used to determine whether to keep
+// parsing the current expression or break and start
+// a sub-expression, to determine the grouping of otherwise
+// ambiguous expressions.
+//
+// For example `1 == a and 2 == b` is the same as
+// `(1 == a) and (2 == b) because `and` has a lower
+// precedence than `==`.
 typedef enum {
     PREC_NONE,
     PREC_ASSIGNMENT,    // =
@@ -32,6 +52,7 @@ typedef enum {
     PREC_PRIMARY,
 } Precedence;
 
+// Functios used in the parse table
 typedef void (*ParseFn)(bool canAssign);
 
 // # A single row in the parse table
@@ -83,71 +104,21 @@ typedef struct {
 Parser parser;
 Compiler* current = NULL;
 
-static void initCompiler(Compiler*, FunctionType);
-static void advance();
-static void expression();
-static void statement();
-static void declaration();
-static bool match(TokenType type);
-static void consume(TokenType, const char*);
-static ObjFunction* endCompiler();
+// # Prototypes
 
-static void emitReturn();
-static void emitByte(uint8_t);
-static void emitBytes(uint8_t, uint8_t);
-
-static uint8_t parseVariable(const char*);
-static void defineVariable(uint8_t);
-
-static uint8_t makeConstant(Value);
-static uint8_t identifierConstant(Token*);
-static bool identifiersEqual(Token*, Token*);
-
-static void parsePrecedence(Precedence);
+// Pulled up because it depends on the table, which in turn
+// depends on the rest of the functions being defined
 static ParseRule* getRule(TokenType);
-
-static Chunk* currentChunk();
-
-static void error(const char*);
-static void errorAtCurrent(const char*);
-static void errorAt(Token*, const char*);
-
-// # Compile
-//
-// This is the entry point for the whole interpreter. Strings of Lox are taken
-// in and converted to code chunks that the VM can operate on. In the process,
-// we also parse constant values to push onto the constants stack.
-ObjFunction* compile(const char* source) {
-    initScanner(source);
-    Compiler compiler;
-    initCompiler(&compiler, TYPE_SCRIPT);
-
-    parser.hadError = false;
-    parser.hadError = false;
-
-    advance();
-
-    while (!match(TOKEN_EOF)) {
-        declaration();
-    }
-
-    ObjFunction* function = endCompiler();
-
-    return parser.hadError ? NULL : function;
-}
+// Pulled up because its definition references a few kinds
+// of statements, but each of those can contain other statements,
+// so we want to be able to access this in the specific functions.
+// For example, `whileStatement`, `ifStatement`.
+static void statement();
 
 /// # Error handling
 ///
 /// This section contains functions for dealing with error tokens that were found
 /// during the scanning stage of the interpreter.
-static void error(const char* message) {
-    errorAt(&parser.previous, message);
-}
-
-static void errorAtCurrent(const char* message) {
-    errorAt(&parser.current, message);
-}
-
 static void errorAt(Token* token, const char* message) {
     if (parser.panicMode) return;
     parser.panicMode = true;
@@ -166,10 +137,25 @@ static void errorAt(Token* token, const char* message) {
     parser.hadError = true;
 }
 
+static void error(const char* message) {
+    errorAt(&parser.previous, message);
+}
+
+static void errorAtCurrent(const char* message) {
+    errorAt(&parser.current, message);
+}
+
+static Chunk* currentChunk() {
+    return &current->function->chunk;
+}
+
 /// # Bytecode emitter
 ///
 /// This section contains functions for emtting bytes to the current chunk of
 /// bytecode.
+
+// All the functions that emit bytes rely on the helpers that
+// do the actual emitting.
 static void emitByte(uint8_t byte) {
     writeChunk(currentChunk(), byte, parser.previous.line);
 }
@@ -201,6 +187,14 @@ static int emitJump(uint8_t instruction) {
     return currentChunk()->count - 2;
 }
 
+// ## Patch jump
+//
+// Assume that we've already emitted a jump and the following
+// few bytes of bytecode that we want to (maybe) jump over.
+// Then we'll use this helper to peek backwards by `offset`,
+// modify the location pointed to by that jump instruction
+// to right here (the current token), and ensure that the jump
+// is aligned correctly over those two bytes.
 static void patchJump(int offset) {
     // -2 to adjust for the bytecode for the jump itself
     int jump = currentChunk()->count - offset - 2;
@@ -213,8 +207,28 @@ static void patchJump(int offset) {
     currentChunk()->code[offset + 1] = jump & 0xff;
 }
 
-static Chunk* currentChunk() {
-    return &current->function->chunk;
+static void emitReturn() {
+    emitByte(OP_RETURN);
+}
+
+/// # Compiler control functions
+///
+/// This section is made of functions that control the flow of the compiler/parser.
+/// They either move the current token forward, check the surrounding tokens, or
+/// dispatch to some sub-section of the parser to handle a kind of token.
+
+static void initCompiler(Compiler* compiler, FunctionType type) {
+    compiler->function = NULL;
+    compiler->type = type;
+    compiler->localCount = 0;
+    compiler->scopeDepth = 0;
+    compiler->function = newFunction();
+    current = compiler;
+
+    Local* local = &current->locals[current->localCount++];
+    local->depth = 0;
+    local->name.start = "";
+    local->name.length = 0;
 }
 
 static ObjFunction* endCompiler() {
@@ -232,28 +246,6 @@ static ObjFunction* endCompiler() {
     return function;
 }
 
-static void emitReturn() {
-    emitByte(OP_RETURN);
-}
-
-static void emitConstant(Value value) {
-    emitBytes(OP_CONSTANT, makeConstant(value));
-}
-
-static void initCompiler(Compiler* compiler, FunctionType type) {
-    compiler->function = NULL;
-    compiler->type = type;
-    compiler->localCount = 0;
-    compiler->scopeDepth = 0;
-    compiler->function = newFunction();
-    current = compiler;
-
-    Local* local = &current->locals[current->localCount++];
-    local->depth = 0;
-    local->name.start = "";
-    local->name.length = 0;
-}
-
 static uint8_t makeConstant(Value value) {
     int constant = addConstant(currentChunk(), value);
     if (constant > UINT8_MAX) {
@@ -264,11 +256,10 @@ static uint8_t makeConstant(Value value) {
     return (uint8_t) constant;
 }
 
-/// # Compiler control functions
-///
-/// This section is made of functions that control the flow of the compiler/parser.
-/// They either move the current token forward, check the surrounding tokens, or
-/// dispatch to some sub-section of the parser to handle a kind of token.
+static void emitConstant(Value value) {
+    emitBytes(OP_CONSTANT, makeConstant(value));
+}
+
 static void advance() {
     parser.previous = parser.current;
 
@@ -299,25 +290,41 @@ static bool match(TokenType type) {
     return true;
 }
 
-static void expression() {
-    parsePrecedence(PREC_ASSIGNMENT);
-}
+static void parsePrecedence(Precedence precedence) {
+    advance();
 
-
-// # Block statements
-//
-// Blocks just execute the contained statements in order. The
-// interesting (while simple) bit is the scope functions below.
-// In jlox, we popped or added scopes to a stack, but here we
-// just track the scope level and have variables track their
-// own depth. So creating or closing a scope just means updating
-// the tracked scope depth, an integer.
-static void block() {
-    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
-        declaration();
+    // We call `getRule(...)->prefix` only when we first enter the
+    // parsePrecedence function because it takes anything that is
+    // the beginning of an expression, including literals.
+    ParseFn prefixRule = getRule(parser.previous.type)->prefix;
+    if (prefixRule == NULL) {
+        error("Expect expression.");
+        return;
     }
 
-    consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+    bool canAssign = precedence <= PREC_ASSIGNMENT;
+    prefixRule(canAssign);
+
+    // We search for `getRule(...)->infix` later because we have to
+    // have already parsed a full expression to get to an infix
+    // operator. If we don't find any, we just quit.
+    //
+    // We also rely on the precedence of the previous rule to
+    // determine whether to fully parse this operator yet, or to
+    // just keep searching.
+    while (precedence <= getRule(parser.current.type)->precedence) {
+        advance();
+        ParseFn infixRule = getRule(parser.previous.type)->infix;
+        infixRule(canAssign);
+    }
+
+    if (canAssign && match(TOKEN_EQUAL)) {
+        error("Invalid assignment target.");
+    }
+}
+
+static void expression() {
+    parsePrecedence(PREC_ASSIGNMENT);
 }
 
 static void beginScope() {
@@ -332,6 +339,89 @@ static void endScope() {
         emitByte(OP_POP);
         current->localCount--;
     }
+}
+
+static void markInitialized() {
+    current->locals[current->localCount - 1].depth =
+            current->scopeDepth;
+}
+
+static void defineVariable(uint8_t global) {
+    if (current->scopeDepth > 0) {
+        // It's a local variable, and we don't have to put the
+        // value anywehre. This is pretty cool! We can just use
+        // the value we pushed to the stack!
+        markInitialized();
+        return;
+    }
+
+    // Pushes the the value at the top of the stack to the
+    // globals variable named by the constant pool location ref'ed
+    // by `global`
+    emitBytes(OP_DEFINE_GLOBAL, global);
+}
+
+// # Check if two variables have the same name
+//
+// Don't just use the interned string compare because we haven't
+// interned these strings
+static bool identifiersEqual(Token* a, Token* b) {
+    if (a->length != b->length) return false; // Quick check and bail
+    return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static void addLocal(Token name) {
+    if (current->localCount == UINT8_COUNT) {
+        error("Too many local variables in function.");
+        return;
+    }
+
+    Local* local = &current->locals[current->localCount++];
+    // Fine to use the name because it comes form the source chunk.
+    // Once the compiling is done, we don't need the tokens anymore,
+    // unless we build some kind of stack tracing in. Therefore it's
+    // okay to drop them then and depend on them before we drop them
+    // (them being the source names).
+    local->name = name;
+    local->depth = UNINITIALIZED_SENTINEL_DEPTH;
+}
+
+static void declareVariable() {
+    if (current->scopeDepth == 0) return; // Global variable
+
+    Token* name = &parser.previous;
+    for (int i = current->localCount - 1; i >= 0; i--) {
+        Local* local = &current->locals[i];
+        if (local->depth != UNINITIALIZED_SENTINEL_DEPTH &&
+                local->depth < current->scopeDepth) {
+            // This is from the parent scope, so stop
+            break;
+        }
+
+        if (identifiersEqual(name, &local->name)) {
+            error("Already variable with this name in this scope.");
+        }
+    }
+    addLocal(*name);
+}
+
+// # Create a global variable name constant
+//
+// Because global variables are looked up by name at runtime, we
+// need to track variable names as constants. This could be an issue
+// if we have a lot of global variables, we'll start ot eat into
+// the constant storage. Maybe we'll revisit this?
+static uint8_t identifierConstant(Token* name) {
+    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
+
+static uint8_t parseVariable(const char* errorMessage) {
+    consume(TOKEN_IDENTIFIER, errorMessage);
+
+    declareVariable();
+    if (current->scopeDepth > 0) return 0;
+
+    return identifierConstant(&parser.previous);
 }
 
 static void varDeclaration() {
@@ -476,14 +566,59 @@ static void synchronize() {
     }
 }
 
+static void funDeclaration() {}
+
 static void declaration() {
-    if (match(TOKEN_VAR)) {
+    if (match(TOKEN_FUN)) {
+        funDeclaration();
+    } else if (match(TOKEN_VAR)) {
         varDeclaration();
     } else {
         statement();
     }
 
     if (parser.panicMode) synchronize();
+}
+
+// # Compile
+//
+// This is the entry point for the whole interpreter. Strings of Lox are taken
+// in and converted to code chunks that the VM can operate on. In the process,
+// we also parse constant values to push onto the constants stack.
+ObjFunction* compile(const char* source) {
+    initScanner(source);
+    Compiler compiler;
+    initCompiler(&compiler, TYPE_SCRIPT);
+
+    parser.hadError = false;
+    parser.hadError = false;
+
+    advance();
+
+    while (!match(TOKEN_EOF)) {
+        declaration();
+    }
+
+    ObjFunction* function = endCompiler();
+
+    return parser.hadError ? NULL : function;
+}
+
+
+// # Block statements
+//
+// Blocks just execute the contained statements in order. The
+// interesting (while simple) bit is the scope functions below.
+// In jlox, we popped or added scopes to a stack, but here we
+// just track the scope level and have variables track their
+// own depth. So creating or closing a scope just means updating
+// the tracked scope depth, an integer.
+static void block() {
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        declaration();
+    }
+
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
 static void statement() {
@@ -704,122 +839,6 @@ ParseRule rules[] = {
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
 };
-
-static void parsePrecedence(Precedence precedence) {
-    advance();
-
-    // We call `getRule(...)->prefix` only when we first enter the
-    // parsePrecedence function because it takes anything that is
-    // the beginning of an expression, including literals.
-    ParseFn prefixRule = getRule(parser.previous.type)->prefix;
-    if (prefixRule == NULL) {
-        error("Expect expression.");
-        return;
-    }
-
-    bool canAssign = precedence <= PREC_ASSIGNMENT;
-    prefixRule(canAssign);
-
-    // We search for `getRule(...)->infix` later because we have to
-    // have already parsed a full expression to get to an infix
-    // operator. If we don't find any, we just quit.
-    //
-    // We also rely on the precedence of the previous rule to
-    // determine whether to fully parse this operator yet, or to
-    // just keep searching.
-    while (precedence <= getRule(parser.current.type)->precedence) {
-        advance();
-        ParseFn infixRule = getRule(parser.previous.type)->infix;
-        infixRule(canAssign);
-    }
-
-    if (canAssign && match(TOKEN_EQUAL)) {
-        error("Invalid assignment target.");
-    }
-}
-
-// # Create a global variable name constant
-//
-// Because global variables are looked up by name at runtime, we
-// need to track variable names as constants. This could be an issue
-// if we have a lot of global variables, we'll start ot eat into
-// the constant storage. Maybe we'll revisit this?
-static uint8_t identifierConstant(Token* name) {
-    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
-}
-
-static void addLocal(Token name) {
-    if (current->localCount == UINT8_COUNT) {
-        error("Too many local variables in function.");
-        return;
-    }
-
-    Local* local = &current->locals[current->localCount++];
-    // Fine to use the name because it comes form the source chunk.
-    // Once the compiling is done, we don't need the tokens anymore,
-    // unless we build some kind of stack tracing in. Therefore it's
-    // okay to drop them then and depend on them before we drop them
-    // (them being the source names).
-    local->name = name;
-    local->depth = UNINITIALIZED_SENTINEL_DEPTH;
-}
-
-// # Check if two variables have the same name
-//
-// Don't just use the interned string compare because we haven't
-// interned these strings
-static bool identifiersEqual(Token* a, Token* b) {
-    if (a->length != b->length) return false; // Quick check and bail
-    return memcmp(a->start, b->start, a->length) == 0;
-}
-
-static void declareVariable() {
-    if (current->scopeDepth == 0) return; // Global variable
-
-    Token* name = &parser.previous;
-    for (int i = current->localCount - 1; i >= 0; i--) {
-        Local* local = &current->locals[i];
-        if (local->depth != UNINITIALIZED_SENTINEL_DEPTH &&
-                local->depth < current->scopeDepth) {
-            // This is from the parent scope, so stop
-            break;
-        }
-
-        if (identifiersEqual(name, &local->name)) {
-            error("Already variable with this name in this scope.");
-        }
-    }
-    addLocal(*name);
-}
-
-static uint8_t parseVariable(const char* errorMessage) {
-    consume(TOKEN_IDENTIFIER, errorMessage);
-
-    declareVariable();
-    if (current->scopeDepth > 0) return 0;
-
-    return identifierConstant(&parser.previous);
-}
-
-static void markInitialized() {
-    current->locals[current->localCount - 1].depth =
-            current->scopeDepth;
-}
-
-static void defineVariable(uint8_t global) {
-    if (current->scopeDepth > 0) {
-        // It's a local variable, and we don't have to put the
-        // value anywehre. This is pretty cool! We can just use
-        // the value we pushed to the stack!
-        markInitialized();
-        return;
-    }
-
-    // Pushes the the value at the top of the stack to the
-    // globals variable named by the constant pool location ref'ed
-    // by `global`
-    emitBytes(OP_DEFINE_GLOBAL, global);
-}
 
 static ParseRule* getRule(TokenType type) {
     return &rules[type];
