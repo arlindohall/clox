@@ -109,11 +109,17 @@ Compiler* current = NULL;
 // Pulled up because it depends on the table, which in turn
 // depends on the rest of the functions being defined
 static ParseRule* getRule(TokenType);
+
 // Pulled up because its definition references a few kinds
 // of statements, but each of those can contain other statements,
 // so we want to be able to access this in the specific functions.
 // For example, `whileStatement`, `ifStatement`.
 static void statement();
+
+// Pulled up so we can refernce declarations inside blocks,
+// while we also reference blocks inside functions, and
+// functions inside declarations.
+static void declaration();
 
 /// # Error handling
 ///
@@ -342,6 +348,7 @@ static void endScope() {
 }
 
 static void markInitialized() {
+    if (current->scopeDepth == 0) return; // Was called in global scope, should be a function
     current->locals[current->localCount - 1].depth =
             current->scopeDepth;
 }
@@ -566,7 +573,42 @@ static void synchronize() {
     }
 }
 
-static void funDeclaration() {}
+// ## Block statements
+//
+// Blocks just execute the contained statements in order. The
+// interesting (while simple) bit is the scope functions below.
+// In jlox, we popped or added scopes to a stack, but here we
+// just track the scope level and have variables track their
+// own depth. So creating or closing a scope just means updating
+// the tracked scope depth, an integer.
+static void block() {
+    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+        declaration();
+    }
+
+    consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+
+static void function(FunctionType type) {
+    Compiler compiler;
+    initCompiler(&compiler, type);
+    beginScope();
+
+    consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+    consume(TOKEN_RIGHT_PAREN, "Expect '(' after parameters.");
+    consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.");
+    block();
+
+    ObjFunction* function = endCompiler();
+    emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+}
+
+static void funDeclaration() {
+    uint8_t global = parseVariable("Expect function name.");
+    markInitialized();
+    function(TYPE_FUNCTION);
+    defineVariable(global);
+}
 
 static void declaration() {
     if (match(TOKEN_FUN)) {
@@ -602,23 +644,6 @@ ObjFunction* compile(const char* source) {
     ObjFunction* function = endCompiler();
 
     return parser.hadError ? NULL : function;
-}
-
-
-// # Block statements
-//
-// Blocks just execute the contained statements in order. The
-// interesting (while simple) bit is the scope functions below.
-// In jlox, we popped or added scopes to a stack, but here we
-// just track the scope level and have variables track their
-// own depth. So creating or closing a scope just means updating
-// the tracked scope depth, an integer.
-static void block() {
-    while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
-        declaration();
-    }
-
-    consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
 static void statement() {
