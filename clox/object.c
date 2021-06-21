@@ -28,11 +28,11 @@ ObjFunction* newFunction() {
     return function;
 }
 
-// # Allocate a new string object
-//
-// We expect the caller to check if the string is interned before calling.
-// That's why we're able to call tableSet without checking if it's there
-// first, and allocate a string every time we call.
+/// # Allocate a new string object
+///
+/// We expect the caller to check if the string is interned before calling.
+/// That's why we're able to call tableSet without checking if it's there
+/// first, and allocate a string every time we call.
 static ObjString* allocateString(char* chars, int length, uint32_t hash) {
     ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
     string->length = length;
@@ -54,10 +54,10 @@ static uint32_t hashString(const char* key, int length) {
     return hash;
 }
 
-// # Use a reference to a string as the base for this
-//
-// This is useful when creating a new string out of an existing interned
-// string because we added two strings together.
+/// # Use a reference to a string as the base for this
+///
+/// This is useful when creating a new string out of an existing interned
+/// string because we added two strings together.
 ObjString* takeString(char* chars, int length) {
     uint32_t hash = hashString(chars, length);
     ObjString* interned = tableFindString(&vm.strings, chars, length, hash);

@@ -41,9 +41,9 @@ typedef enum {
     INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
-// We expose the VM to the outside world so that we can actually
-// view the object list elsewhere in the interpreter. Messy, but
-// effective.
+/// We expose the VM to the outside world so that we can actually
+/// view the object list elsewhere in the interpreter. Messy, but
+/// effective.
 extern VM vm;
 
 void initVM();

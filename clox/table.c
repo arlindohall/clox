@@ -47,10 +47,10 @@ static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
     }
 }
 
-// # Increase the size of a hash map
-//
-// Whenever we reach the load factor, call this to allocate new space
-// and then copy each entry over to the new array.
+/// # Increase the size of a hash map
+///
+/// Whenever we reach the load factor, call this to allocate new space
+/// and then copy each entry over to the new array.
 static void adjustCapacity(Table* table, int capacity) {
     Entry* entries = ALLOCATE(Entry, capacity);
 
@@ -76,20 +76,20 @@ static void adjustCapacity(Table* table, int capacity) {
     table->capacity = capacity;
 }
 
-// # Insert an item into the table, pass-by-value
-//
-// The set function starts by checking if the table is big enough
-// to fit one more item without being more than 75% full (less then
-// completely full because we'll start to see too many collisions
-// even before it is full). If it's too full, re-size right away
-// and copy every element over. Just like with the growable arrays
-// we rely on the growing factor to smooth out pauses for growing
-// so the average insert time is as if the array was always big enough.
-//
-// Then, we just look through the array at the hash, scanning until
-// we find where the key (string) matches or there is nothing. If
-// there's nothing there yet, we just increment the table size.
-// In both cases, we just overwrite the key and value.
+/// # Insert an item into the table, pass-by-value
+///
+/// The set function starts by checking if the table is big enough
+/// to fit one more item without being more than 75% full (less then
+/// completely full because we'll start to see too many collisions
+/// even before it is full). If it's too full, re-size right away
+/// and copy every element over. Just like with the growable arrays
+/// we rely on the growing factor to smooth out pauses for growing
+/// so the average insert time is as if the array was always big enough.
+///
+/// Then, we just look through the array at the hash, scanning until
+/// we find where the key (string) matches or there is nothing. If
+/// there's nothing there yet, we just increment the table size.
+/// In both cases, we just overwrite the key and value.
 bool tableSet(Table* table, ObjString* key, Value value) {
     if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
         int capacity = GROW_CAPACITY(table->capacity);
@@ -105,10 +105,10 @@ bool tableSet(Table* table, ObjString* key, Value value) {
     return isNewKey;
 }
 
-// # Get item from table
-//
-// Note that the return value reflects whether the item exists, not
-// the item value itself.
+/// # Get item from table
+///
+/// Note that the return value reflects whether the item exists, not
+/// the item value itself.
 bool tableGet(Table* table, ObjString* key, Value* value) {
     // In case the table is null, also optimizes for empty allocated table
     if (table->count == 0) return false;
@@ -121,11 +121,11 @@ bool tableGet(Table* table, ObjString* key, Value* value) {
     return false;
 }
 
-// # Delete item from table
-//
-// This leaves a tombstone in place in the table to avoid the
-// problem of dropped adjacent items. Like getting, we skip the
-// case where the count is zero.
+/// # Delete item from table
+///
+/// This leaves a tombstone in place in the table to avoid the
+/// problem of dropped adjacent items. Like getting, we skip the
+/// case where the count is zero.
 bool tableDelete(Table* table, ObjString* key) {
     if (table->count == 0) return false;
 
@@ -140,9 +140,9 @@ bool tableDelete(Table* table, ObjString* key) {
     return true;
 }
 
-// # Print table contents
-//
-// For debugging purposes to peek into table
+/// # Print table contents
+///
+/// For debugging purposes to peek into table
 void tablePrint(Table* table) {
     for (int i = 0; i < table->capacity; i++) {
         Entry* entry = &table->entries[i];
@@ -169,12 +169,12 @@ void tableAddAll(Table* from, Table* to) {
     }
 }
 
-// # Find a string from a table, without comparing pointers
-//
-// If we did a pointer compare here like in `tableGet`, we'd have
-// a regression because we use this method when working with interning
-// strings. So we need to actually copmare the whole string contents
-// so that we can be sure the strings are unique.
+/// # Find a string from a table, without comparing pointers
+///
+/// If we did a pointer compare here like in `tableGet`, we'd have
+/// a regression because we use this method when working with interning
+/// strings. So we need to actually copmare the whole string contents
+/// so that we can be sure the strings are unique.
 ObjString* tableFindString(Table* table, const char* chars, int length,
                            uint32_t hash) {
     if (table->count == 0) return NULL;

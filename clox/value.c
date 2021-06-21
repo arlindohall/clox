@@ -45,15 +45,15 @@ void printValue(Value value) {
     }
 }
 
-// # Compare to values
-//
-// In the case of primitive values, we store the value in the struct,
-// so comparing gives a direct comparison. In the case of objects, we
-// only say two objects are equal if the are identical (point to the
-// same block of memory). Strings are special, because they are interned,
-// so every string pointer that points to the same part of the string
-// table is the same string, but that means the pointer comparison works
-// still.
+/// # Compare to values
+///
+/// In the case of primitive values, we store the value in the struct,
+/// so comparing gives a direct comparison. In the case of objects, we
+/// only say two objects are equal if the are identical (point to the
+/// same block of memory). Strings are special, because they are interned,
+/// so every string pointer that points to the same part of the string
+/// table is the same string, but that means the pointer comparison works
+/// still.
 bool valuesEqual(Value a, Value b) {
     if (a.type != b.type) return false;
     switch (a.type) {

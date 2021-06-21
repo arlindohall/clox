@@ -11,18 +11,18 @@
 #include "debug.h"
 #endif
 
-// # Data structures
+/// # Data structures
 
-// ## Parser
-//
-// Main data structure of the compiler (which the book stresses
-// is really just a parser that outputs bytecode instead of
-// syntax trees).
-//
-// Contains a pointer to the current and last tokens in the
-// scanned source text for convenience. Also tracks whether
-// there has ever been a compiler error or we are currently
-// panicing and trying to recover.
+/// ## Parser
+///
+/// Main data structure of the compiler (which the book stresses
+/// is really just a parser that outputs bytecode instead of
+/// syntax trees).
+///
+/// Contains a pointer to the current and last tokens in the
+/// scanned source text for convenience. Also tracks whether
+/// there has ever been a compiler error or we are currently
+/// panicing and trying to recover.
 typedef struct {
     Token current;
     Token previous;
@@ -30,14 +30,14 @@ typedef struct {
     bool panicMode;
 } Parser;
 
-// Precedences are used to determine whether to keep
-// parsing the current expression or break and start
-// a sub-expression, to determine the grouping of otherwise
-// ambiguous expressions.
-//
-// For example `1 == a and 2 == b` is the same as
-// `(1 == a) and (2 == b) because `and` has a lower
-// precedence than `==`.
+/// Precedences are used to determine whether to keep
+/// parsing the current expression or break and start
+/// a sub-expression, to determine the grouping of otherwise
+/// ambiguous expressions.
+///
+/// For example `1 == a and 2 == b` is the same as
+/// `(1 == a) and (2 == b) because `and` has a lower
+/// precedence than `==`.
 typedef enum {
     PREC_NONE,
     PREC_ASSIGNMENT,    // =
@@ -52,32 +52,32 @@ typedef enum {
     PREC_PRIMARY,
 } Precedence;
 
-// Functios used in the parse table
+/// Functios used in the parse table
 typedef void (*ParseFn)(bool canAssign);
 
-// # A single row in the parse table
-//
-// This struct stores the rules for each kind of token in
-// the langauge. A key thing to note is that `prefix` stores
-// the rules for literals like strings and numbers as well as
-// prefix operators like negative. There are two columns, prefix
-// and infix, for operators like `-` that can be both, and we
-// decide which one to use based on whether we just started a
-// new expression or we are in the middle of an expression.
+/// # A single row in the parse table
+///
+/// This struct stores the rules for each kind of token in
+/// the langauge. A key thing to note is that `prefix` stores
+/// the rules for literals like strings and numbers as well as
+/// prefix operators like negative. There are two columns, prefix
+/// and infix, for operators like `-` that can be both, and we
+/// decide which one to use based on whether we just started a
+/// new expression or we are in the middle of an expression.
 typedef struct {
     ParseFn prefix;
     ParseFn infix;
     Precedence precedence;
 } ParseRule;
 
-// # The struct that tracks local variables in scope
-//
-// The compiler struct tracks the local variables, the depth of the
-// current scope, and the number of locals we currently have. This
-// is opposed to tracking a linked list/stack of hash maps in jlox.
-// (https://github.com/arlindohall/rlox/blob/main/src/interpreter.rs#L34) 
-//
-// Internal type of Local is a name and a resolution depth
+/// # The struct that tracks local variables in scope
+///
+/// The compiler struct tracks the local variables, the depth of the
+/// current scope, and the number of locals we currently have. This
+/// is opposed to tracking a linked list/stack of hash maps in jlox.
+/// (https://github.com/arlindohall/rlox/blob/main/src/interpreter.rs#L34) 
+///
+/// Internal type of Local is a name and a resolution depth
 typedef struct {
     Token name;
     int depth;
@@ -105,28 +105,28 @@ typedef struct Compiler {
     int scopeDepth;
 } Compiler;
 
-// We could initialize these in the language runtime, and then pass each
-// reference into the calling funciton. That would allow us to have
-// multiple threads with separate memory. It would also require a
-// refactor that I (and the book) don't want to do.
+/// We could initialize these in the language runtime, and then pass each
+/// reference into the calling funciton. That would allow us to have
+/// multiple threads with separate memory. It would also require a
+/// refactor that I (and the book) don't want to do.
 Parser parser;
 Compiler* current = NULL;
 
-// # Prototypes
+/// # Prototypes
 
-// Pulled up because it depends on the table, which in turn
-// depends on the rest of the functions being defined
+/// Pulled up because it depends on the table, which in turn
+/// depends on the rest of the functions being defined
 static ParseRule* getRule(TokenType);
 
-// Pulled up because its definition references a few kinds
-// of statements, but each of those can contain other statements,
-// so we want to be able to access this in the specific functions.
-// For example, `whileStatement`, `ifStatement`.
+/// Pulled up because its definition references a few kinds
+/// of statements, but each of those can contain other statements,
+/// so we want to be able to access this in the specific functions.
+/// For example, `whileStatement`, `ifStatement`.
 static void statement();
 
-// Pulled up so we can refernce declarations inside blocks,
-// while we also reference blocks inside functions, and
-// functions inside declarations.
+/// Pulled up so we can refernce declarations inside blocks,
+/// while we also reference blocks inside functions, and
+/// functions inside declarations.
 static void declaration();
 
 /// # Error handling
@@ -168,8 +168,8 @@ static Chunk* currentChunk() {
 /// This section contains functions for emtting bytes to the current chunk of
 /// bytecode.
 
-// All the functions that emit bytes rely on the helpers that
-// do the actual emitting.
+/// All the functions that emit bytes rely on the helpers that
+/// do the actual emitting.
 static void emitByte(uint8_t byte) {
     writeChunk(currentChunk(), byte, parser.previous.line);
 }
@@ -201,14 +201,14 @@ static int emitJump(uint8_t instruction) {
     return currentChunk()->count - 2;
 }
 
-// ## Patch jump
-//
-// Assume that we've already emitted a jump and the following
-// few bytes of bytecode that we want to (maybe) jump over.
-// Then we'll use this helper to peek backwards by `offset`,
-// modify the location pointed to by that jump instruction
-// to right here (the current token), and ensure that the jump
-// is aligned correctly over those two bytes.
+/// ## Patch jump
+///
+/// Assume that we've already emitted a jump and the following
+/// few bytes of bytecode that we want to (maybe) jump over.
+/// Then we'll use this helper to peek backwards by `offset`,
+/// modify the location pointed to by that jump instruction
+/// to right here (the current token), and ensure that the jump
+/// is aligned correctly over those two bytes.
 static void patchJump(int offset) {
     // -2 to adjust for the bytecode for the jump itself
     int jump = currentChunk()->count - offset - 2;
@@ -380,10 +380,10 @@ static void defineVariable(uint8_t global) {
     emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
-// # Check if two variables have the same name
-//
-// Don't just use the interned string compare because we haven't
-// interned these strings
+/// # Check if two variables have the same name
+///
+/// Don't just use the interned string compare because we haven't
+/// interned these strings
 static bool identifiersEqual(Token* a, Token* b) {
     if (a->length != b->length) return false; // Quick check and bail
     return memcmp(a->start, b->start, a->length) == 0;
@@ -424,12 +424,12 @@ static void declareVariable() {
     addLocal(*name);
 }
 
-// # Create a global variable name constant
-//
-// Because global variables are looked up by name at runtime, we
-// need to track variable names as constants. This could be an issue
-// if we have a lot of global variables, we'll start ot eat into
-// the constant storage. Maybe we'll revisit this?
+/// # Create a global variable name constant
+///
+/// Because global variables are looked up by name at runtime, we
+/// need to track variable names as constants. This could be an issue
+/// if we have a lot of global variables, we'll start ot eat into
+/// the constant storage. Maybe we'll revisit this?
 static uint8_t identifierConstant(Token* name) {
     return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
 }
@@ -585,14 +585,14 @@ static void synchronize() {
     }
 }
 
-// ## Block statements
-//
-// Blocks just execute the contained statements in order. The
-// interesting (while simple) bit is the scope functions below.
-// In jlox, we popped or added scopes to a stack, but here we
-// just track the scope level and have variables track their
-// own depth. So creating or closing a scope just means updating
-// the tracked scope depth, an integer.
+/// ## Block statements
+///
+/// Blocks just execute the contained statements in order. The
+/// interesting (while simple) bit is the scope functions below.
+/// In jlox, we popped or added scopes to a stack, but here we
+/// just track the scope level and have variables track their
+/// own depth. So creating or closing a scope just means updating
+/// the tracked scope depth, an integer.
 static void block() {
     while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
         declaration();
@@ -634,11 +634,11 @@ static void declaration() {
     if (parser.panicMode) synchronize();
 }
 
-// # Compile
-//
-// This is the entry point for the whole interpreter. Strings of Lox are taken
-// in and converted to code chunks that the VM can operate on. In the process,
-// we also parse constant values to push onto the constants stack.
+/// # Compile
+///
+/// This is the entry point for the whole interpreter. Strings of Lox are taken
+/// in and converted to code chunks that the VM can operate on. In the process,
+/// we also parse constant values to push onto the constants stack.
 ObjFunction* compile(const char* source) {
     initScanner(source);
     Compiler compiler;
@@ -688,7 +688,7 @@ static void string(bool canAssign) {
                                     parser.previous.length - 2)));
 }
 
-// Helper only used by namedVariable
+/// Helper only used by namedVariable
 static int resolveLocal(Compiler* compiler, Token* name) {
     for (int i = compiler->localCount - 1; i >= 0; i--) {
         // Check each local variable (item on stack)
@@ -779,9 +779,9 @@ static void binary(bool canAssign) {
     }
 }
 
-// Note: this does not include number literals, which are handled by
-// the special-purpose `number` function. This is dispatched to by the
-// parsing table
+/// Note: this does not include number literals, which are handled by
+/// the special-purpose `number` function. This is dispatched to by the
+/// parsing table
 static void literal(bool canAssign) {
     switch (parser.previous.type) {
         case TOKEN_FALSE:   emitByte(OP_FALSE); break;

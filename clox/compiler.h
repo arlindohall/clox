@@ -7,7 +7,7 @@
 
 ObjFunction* compile(const char* source);
 
-// Used to track uninitialized variables with the depth field of a `Local`
+/// Used to track uninitialized variables with the depth field of a `Local`
 #define UNINITIALIZED_SENTINEL_DEPTH -1
 
 #endif
