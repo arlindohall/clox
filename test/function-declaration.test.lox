@@ -1,0 +1,14 @@
+// Declare function
+fun areWeHavingItYet() {
+  print "Yes we are!";
+}
+
+// Reference function (do not call as at the
+// time of writing we don't support that yet)
+print areWeHavingItYet;
+
+fun someMore(a, b) {
+  print "With parameters";
+}
+
+print someMore;
