@@ -88,7 +88,15 @@ typedef enum {
     TYPE_SCRIPT
 } FunctionType;
 
-typedef struct {
+/// ## Compiler struct
+///
+/// This is the primary data structure for the compiler,
+/// and one key thing to note is that it is a linked list
+/// of compilers, terminated by `NULL`. Each compiler points
+/// to its lexical parent. So a new compiler for a function
+/// points back to the script context
+typedef struct Compiler {
+    struct Compiler* enclosing;
     ObjFunction* function;
     FunctionType type;
 
@@ -224,6 +232,7 @@ static void emitReturn() {
 /// dispatch to some sub-section of the parser to handle a kind of token.
 
 static void initCompiler(Compiler* compiler, FunctionType type) {
+    compiler->enclosing = current;
     compiler->function = NULL;
     compiler->type = type;
     compiler->localCount = 0;
@@ -249,6 +258,9 @@ static ObjFunction* endCompiler() {
     }
 #endif
 
+    // We assume here (obviously) that the `current`
+    // has been initialized.
+    current = current->enclosing;
     return function;
 }
 
