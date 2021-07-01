@@ -62,6 +62,19 @@ static Value peek(int distance) {
 }
 
 static bool call(ObjFunction* function, int argCount) {
+    if (argCount != function->arity) {
+        runtimeError(
+            "Expected %d arguments but got %d",
+            function->arity,
+            argCount
+        );
+    }
+
+    if (vm.frameCount == FRAMES_MAX) {
+        runtimeError("Stack overflow.");
+        return false;
+    }
+
     CallFrame* frame = &vm.frames[vm.frameCount++];
     frame->function = function;
     frame->ip = function->chunk.code;
