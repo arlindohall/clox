@@ -1,0 +1,15 @@
+
+fun greet() {
+  print "Hello!";
+}
+
+greet();
+
+fun sum(a, b, c) {
+  return a + b + c;
+}
+
+var x = 4 + sum(5, 6, 7);
+
+print x;
+assert x == 22;

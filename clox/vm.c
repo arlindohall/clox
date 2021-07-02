@@ -280,8 +280,18 @@ InterpretResult run() {
                 break;
             }
             case OP_RETURN: {
-                // Exit interpreter
-                return INTERPRET_OK;
+                Value result = pop();
+                vm.frameCount--;
+                // Exit if we're at the top level
+                if (vm.frameCount == 0) {
+                    pop();
+                    return INTERPRET_OK;
+                }
+
+                vm.stackTop = frame->slots;
+                push(result);
+                frame = &vm.frames[vm.frameCount - 1];
+                break;
             }
         }
     }
