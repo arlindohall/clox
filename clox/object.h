@@ -52,6 +52,7 @@ typedef struct {
     // Functions are first class so they have to start with Obj
     Obj obj;
     int arity;
+    int upvalueCount;
     Chunk chunk;
     // Just for error reporting
     ObjString* name;
