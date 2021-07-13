@@ -73,10 +73,13 @@ struct ObjString {
     uint32_t hash; // Strings keep track of their hash values from creation
 };
 
-typedef struct {
+struct ObjUpvalue {
     Obj obj;
     Value* location;
-} ObjUpvalue;
+    Value closed;
+    // TODO: replace this intrusive linked list with a dynamic array
+    struct ObjUpvalue* next;
+};
 
 typedef struct {
     Obj obj;

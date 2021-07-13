@@ -32,6 +32,8 @@ typedef struct {
     Table globals;
     Table strings;
 
+    ObjUpvalue* openUpvalues;
+    // TODO: Replace ll object tracker with dynamic array
     Obj* objects; // Head of the linked list of objects for GC
 } VM;
 

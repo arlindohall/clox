@@ -6,6 +6,7 @@
 
 typedef struct Obj Obj;
 typedef struct ObjString ObjString;
+typedef struct ObjUpvalue ObjUpvalue;
 
 typedef enum {
     VAL_BOOL,

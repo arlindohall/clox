@@ -1,0 +1,24 @@
+var x = "GlobalVal";
+fun outer() {
+  var x = "LocalVal";
+  fun inner() {
+    return x;
+  }
+  return inner();
+}
+
+assert "LocalVal" == outer();
+assert "GlobalVal" == x;
+
+
+// Note: we should assign to x here, not
+// just a copy of x as an upvalue
+fun first() {
+  var x = "before";
+  fun second() {
+    x = "assigned";
+  }
+  second();
+  assert x == "assigned";
+}
+first();

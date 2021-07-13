@@ -81,6 +81,7 @@ typedef struct {
 typedef struct {
     Token name;
     int depth;
+    bool isCaptured;
 } Local;
 
 typedef struct {
@@ -256,6 +257,7 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
 
     Local* local = &current->locals[current->localCount++];
     local->depth = 0;
+    local->isCaptured = false;
     local->name.start = "";
     local->name.length = 0;
 }
@@ -366,9 +368,15 @@ static void beginScope() {
 static void endScope() {
     current->scopeDepth--;
 
-    while (current->localCount > 0 &&
-            current->locals[current->localCount - 1].depth > current->scopeDepth) {
-        emitByte(OP_POP);
+    while (
+        current->localCount > 0 &&
+        current->locals[current->localCount - 1].depth > current->scopeDepth
+    ) {
+        if (current->locals[current->localCount - 1].isCaptured) {
+            emitByte(OP_CLOSE_UPVALUE);
+        } else {
+            emitByte(OP_POP);
+        }
         current->localCount--;
     }
 }
@@ -417,6 +425,7 @@ static void addLocal(Token name) {
     // (them being the source names).
     local->name = name;
     local->depth = UNINITIALIZED_SENTINEL_DEPTH;
+    local->isCaptured = false;
 }
 
 static void declareVariable() {
@@ -771,7 +780,11 @@ static int addUpvalue(Compiler* compiler, uint8_t index, bool isLocal) {
 
     compiler->upvalues[upvalueCount].isLocal = isLocal;
     compiler->upvalues[upvalueCount].index = index;
-    return compiler->function->upvalueCount;
+    // This was an absolute ghoul of a bug. I left off the `++`, which
+    // meant the compiler wasn't ever adding any upvalues. It showed up
+    // as a segfault whenever I tried to resolve the "0th" upvalue
+    // because I had emitted an instruction to look there, but
+    return compiler->function->upvalueCount++;
 }
 
 static int resolveUpvalue(Compiler* compiler, Token* name) {
@@ -783,6 +796,7 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
 
     int local = resolveLocal(compiler->enclosing, name);
     if (local != UNINITIALIZED_SENTINEL_DEPTH) {
+        compiler->enclosing->locals[local].isCaptured = true;
         return addUpvalue(compiler, (uint8_t)local, true);
     }
 
