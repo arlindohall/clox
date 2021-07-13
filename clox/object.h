@@ -74,6 +74,11 @@ struct ObjString {
 
 typedef struct {
     Obj obj;
+    Value* location;
+} ObjUpvalue;
+
+typedef struct {
+    Obj obj;
     ObjFunction* function;
 } ObjClosure;
 
@@ -82,6 +87,7 @@ ObjFunction* newFunction();
 ObjNative* newNative();
 ObjString* takeString(char*, int);
 ObjString* copyString(const char* chars, int length);
+ObjUpvalue* newUpvalue(Value* slot);
 void printObject(Value value);
 
 static inline bool isObjType(Value value, ObjType type) {

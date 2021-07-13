@@ -651,6 +651,11 @@ static void function(FunctionType type) {
 
     ObjFunction* function = endCompiler();
     emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+
+    for (int i = 0; i < function->upvalueCount; i++) {
+        emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+        emitByte(compiler.upvalues[i].index);
+    }
 }
 
 static void funDeclaration() {
@@ -779,6 +784,19 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
     int local = resolveLocal(compiler->enclosing, name);
     if (local != UNINITIALIZED_SENTINEL_DEPTH) {
         return addUpvalue(compiler, (uint8_t)local, true);
+    }
+
+    int upvalue = resolveUpvalue(compiler->enclosing, name);
+    if (upvalue != UNINITIALIZED_SENTINEL_DEPTH) {
+        // Super cool what we do here. The trick is to point
+        // to the enclosing function's upvalue if it exists, which
+        // means we can get a chain of upvalues for multi-layer
+        // closures, and we don't have to worry about them being
+        // lost because they won't be garbage collected!
+        //
+        // I don't know what happens when the value at the top level gets
+        // kicked off the stack, though.
+        return addUpvalue(compiler, (uint8_t)upvalue, false);
     }
 
     return UNINITIALIZED_SENTINEL_DEPTH;
