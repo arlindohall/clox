@@ -153,7 +153,12 @@ void tablePrint(Table* table) {
             // Tombstone
             printf("=>Tombstone(hash=%d)\n", i);
         } else {
-            printf("=>Entry(hash=%d,key=%s,value=", i, entry->key->chars);
+            printf(
+                "=>Entry(hash=%d, keyPtr=%p, key=%s, value=",
+                i,
+                (void*)entry->key,
+                entry->key->chars
+            );
             printValue(entry->value);
             printf(")\n");
         }
@@ -196,6 +201,15 @@ ObjString* tableFindString(Table* table, const char* chars, int length,
         // don't do that, it will cause infinite loops on every
         // collision
         index = (index + 1) % table->capacity;
+    }
+}
+
+void tableRemoveWhite(Table* table) {
+    for (int i = 0; i < table->capacity; i++) {
+        Entry* entry = &table->entries[i];
+        if (entry->key != NULL && !entry->key->obj.isMarked) {
+            tableDelete(table, entry->key);
+        }
     }
 }
 
