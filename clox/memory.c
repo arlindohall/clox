@@ -35,6 +35,21 @@ void markObject(Obj* object) {
     printf(")\n");
 #endif
     object->isMarked = true;
+
+    if (vm.grayCapacity < vm.grayCount + 1) {
+        vm.grayCapacity = GROW_CAPACITY(vm.grayCapacity);
+        vm.grayStack = (Obj**)realloc(
+            vm.grayStack,
+            sizeof(Obj*) * vm.grayCapacity
+        );
+
+        if (vm.grayStack == NULL) {
+            printf("FATAL --- failure during garbage collection.");
+            exit(1);
+        }
+    }
+
+    vm.grayStack[vm.grayCount++] = object;
 }
 
 void markValue(Value value) {
@@ -117,4 +132,6 @@ void freeObjects() {
         freeObject(object);
         object = next;
     }
+
+    free(vm.grayStack);
 }
