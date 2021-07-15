@@ -33,6 +33,9 @@ typedef struct {
     Table strings;
 
     ObjUpvalue* openUpvalues;
+
+    size_t bytesAllocated;
+    size_t nextGC;
     // TODO: Replace ll object tracker with dynamic array
     Obj* objects; // Head of the linked list of objects for GC
     int grayCount;
