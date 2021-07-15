@@ -6,6 +6,7 @@
 #include "vm.h"
 
 ObjFunction* compile(const char* source);
+void markCompilerRoots();
 
 /// Used to track uninitialized variables with the depth field of a `Local`
 #define UNINITIALIZED_SENTINEL_DEPTH -1
