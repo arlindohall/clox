@@ -40,6 +40,7 @@ typedef enum {
 /// so we use it like a stack.
 struct Obj {
     ObjType type;
+    bool isMarked;
     struct Obj* next;
 };
 
