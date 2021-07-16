@@ -57,6 +57,13 @@ ObjFunction* newFunction() {
     return function;
 }
 
+ObjInstance* newInstance(ObjClass* clss) {
+    ObjInstance* instance = ALLOCATE_OBJ(ObjInstance, OBJ_INSTANCE);
+    instance->clss = clss;
+    initTable(&instance->fields);
+    return instance;
+}
+
 ObjNative* newNative(NativeFn function) {
     ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
     native->function = function;
@@ -145,6 +152,9 @@ void printObject(Value value) {
             break;
         case OBJ_STRING:
             printf("%s", AS_CSTRING(value));
+            break;
+        case OBJ_INSTANCE:
+            printf("Instance<%s>", AS_INSTANCE(value)->clss->name->chars);
             break;
         case OBJ_NATIVE:
             printf("<native fn>");

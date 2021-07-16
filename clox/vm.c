@@ -121,6 +121,11 @@ void initVM() {
 static bool callValue(Value callee, int argCount) {
     if (IS_OBJ(callee)) {
         switch (OBJ_TYPE(callee)) {
+            case OBJ_CLASS: {
+                ObjClass* clss = AS_CLASS(callee);
+                vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(clss));
+                return true;
+            }
             case OBJ_CLOSURE:
                 return call(AS_CLOSURE(callee), argCount);
             case OBJ_NATIVE: {
