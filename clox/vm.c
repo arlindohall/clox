@@ -58,6 +58,9 @@ static void runtimeError(const char* format, ...) {
 }
 
 void push(Value value) {
+#ifdef DEBUG_TRACE_EXECUTION
+    printf("Push(stack=%p, stackTop=%p)\n", vm.stack, vm.stackTop);
+#endif
     *vm.stackTop = value;
     vm.stackTop++;
 }
@@ -396,6 +399,9 @@ InterpretResult run() {
                 frame = &vm.frames[vm.frameCount - 1];
                 break;
             }
+            case OP_CLASS:
+                push(OBJ_VAL(newClass(READ_STRING())));
+                break;
         }
     }
 
