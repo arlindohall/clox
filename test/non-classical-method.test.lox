@@ -1,0 +1,12 @@
+
+fun sayHi() {
+    return "Hello";
+}
+
+class T {}
+
+var t = T();
+
+t.greetMe = sayHi;
+
+assert "Hello" == t.greetMe();
