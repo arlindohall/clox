@@ -55,6 +55,7 @@
         "stdexcept": "cpp",
         "cstdbool": "cpp",
         "typeinfo": "cpp",
-        "debug.h": "c"
+        "debug.h": "c",
+        "table.h": "c"
     }
 }

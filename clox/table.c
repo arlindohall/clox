@@ -118,7 +118,7 @@ bool tableGet(Table* table, ObjString* key, Value* value) {
 
     // Pass-by-reference by modifying pointer. Unsafe but workable
     *value = entry->value;
-    return false;
+    return true;
 }
 
 /// # Delete item from table

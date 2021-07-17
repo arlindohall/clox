@@ -153,8 +153,30 @@ void printObject(Value value) {
         case OBJ_STRING:
             printf("%s", AS_CSTRING(value));
             break;
-        case OBJ_INSTANCE:
-            printf("Instance<%s>", AS_INSTANCE(value)->clss->name->chars);
+        case OBJ_INSTANCE: {
+            ObjInstance* instance = AS_INSTANCE(value);
+            printf("%s(", instance->clss->name->chars);
+
+            bool firstValuePrint = true;
+            for (int i = 0; i < instance->fields.capacity; i++) {
+                Entry entry = instance->fields.entries[i];
+                if (entry.key == NULL) {
+                    // Empty entry or tombstone
+                } else {
+                    if (firstValuePrint) {
+                        // Haven't printed a value yet
+                        firstValuePrint = false;
+                    } else {
+                        // In-between two values. Put a comma
+                        printf(", ");
+                    }
+                    printf("%s=", entry.key->chars);
+                    printValue(entry.value);
+                }
+            }
+
+            printf(")");
+        }
             break;
         case OBJ_NATIVE:
             printf("<native fn>");
