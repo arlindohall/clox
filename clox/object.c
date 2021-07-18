@@ -28,6 +28,7 @@ static Obj* allocateObject(size_t size, ObjType type) {
 ObjClass* newClass(ObjString* name) {
     ObjClass* clss = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
     clss->name = name;
+    initTable(&clss->methods);
     return clss;
 }
 

@@ -1,0 +1,5 @@
+
+class Brunch {
+    bacon() {}
+    eggs() {}
+}
