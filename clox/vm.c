@@ -58,7 +58,7 @@ static void runtimeError(const char* format, ...) {
 }
 
 void push(Value value) {
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG_LOG_GC
     printf("Push(stack=%p, stackTop=%p)\n", vm.stack, vm.stackTop);
 #endif
     *vm.stackTop = value;
@@ -123,6 +123,8 @@ static bool callValue(Value callee, int argCount) {
         switch (OBJ_TYPE(callee)) {
             case OBJ_BOUND_METHOD: {
                 ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+                // Nasty bug here, was accessing stack instead of stackTop...
+                vm.stackTop[-argCount - 1] = bound->receiver;
                 return call(bound->method, argCount);
             }
             case OBJ_CLASS: {

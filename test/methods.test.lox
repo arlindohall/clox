@@ -1,8 +1,34 @@
 class Scone {
   topping(first, second) {
-    print "scone with " + first + " and " + second;
+    return "scone with " + first + " and " + second;
   }
 }
 
 var scone = Scone();
-scone.topping("berries", "cream");
+assert (
+  "scone with berries and cream" == scone.topping("berries", "cream")
+);
+
+class Apple {
+  juice() {
+    this.x = 10;
+    return this.x;
+  }
+}
+
+var j = Apple().juice;
+assert 10 == j();
+
+class Nested {
+  method() {
+    this.x = 10;
+    fun function() {
+      return this.x;
+    }
+
+    return function();
+  }
+}
+
+var m = Nested().method;
+assert 10 == m();

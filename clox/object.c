@@ -147,23 +147,32 @@ ObjUpvalue* newUpvalue(Value* slot) {
 
 static void printFunction(ObjFunction* function) {
     if (function->name == NULL) {
-        printf("<script>");
+        printf("Script");
     } else {
-        printf("<fn %s>", function->name->chars);
+        printf("Function(%s)", function->name->chars);
     }
 }
 
 void printObject(Value value) {
     switch (OBJ_TYPE(value)) {
-        case OBJ_BOUND_METHOD:
-            printFunction(AS_BOUND_METHOD(value)->method->function);
+        case OBJ_BOUND_METHOD: {
+            ObjBoundMethod* bound = AS_BOUND_METHOD(value);
+            printf("BoundMethod(callee=");
+            printValue(bound->receiver);
+            printf(", method=");
+            printFunction(bound->method->function);
+            printf(")");
             break;
+        }
         case OBJ_CLASS:
             printf("%s", AS_CLASS(value)->name->chars);
             break;
-        case OBJ_CLOSURE:
+        case OBJ_CLOSURE: {
+            printf("Closure(function=");
             printFunction(AS_CLOSURE(value)->function);
+            printf(")");
             break;
+        }
         case OBJ_STRING:
             printf("%s", AS_CSTRING(value));
             break;
@@ -193,13 +202,13 @@ void printObject(Value value) {
         }
             break;
         case OBJ_NATIVE:
-            printf("<native fn>");
+            printf("NativeFunction()");
             break;
         case OBJ_FUNCTION:
             printFunction(AS_FUNCTION(value));
             break;
         case OBJ_UPVALUE:
-            printf("upvalue");
+            printf("Upvalue");
             break;
     }
 }
