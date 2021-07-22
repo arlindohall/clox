@@ -2,24 +2,25 @@
 
 # # All tests
 function all {
-    for file in test/*.test.sh; do
-        run_test $file
-    done
-
     for file in test/*.test.lox; do
         run_lox $file
     done
 }
 
-function run_test {
+function assert_fails {
     file=$1
-    echo === Testing $file ===
-    if $file ; then
-        echo === Done testing $file ===
+    $CLOX $file || \
+    if ! $CLOX $file ; then
+        echo === Test $file exited ===
     else
-        echo ❌ Failure during $file...
-        exit 2
+        exit 1 # Failure
     fi
+}
+
+function failures {
+    for file in test/failure-scripts/* ; do
+        assert_fails $file
+    done
 }
 
 function run_lox {
@@ -40,6 +41,7 @@ function build {
 
 function run {
     build
+    failures
     all
 
     echo ✅  Done with all tests!
@@ -53,11 +55,7 @@ function run_file {
         exit 1
     fi
 
-    if [[ $file =~ .*test.lox ]] ; then
-        run_lox $file
-    else
-        run_test $file
-    fi
+    run_lox $file
 
     echo ✅  Done with all tests!
 }
