@@ -26,9 +26,10 @@ static void resetStack() {
 }
 
 void freeVM() {
-    freeObjects();
-    freeTable(&vm.strings);
     freeTable(&vm.globals);
+    freeTable(&vm.strings);
+    vm.initString = NULL;
+    freeObjects();
 }
 
 static void runtimeError(const char* format, ...) {
@@ -115,6 +116,9 @@ void initVM() {
     initTable(&vm.strings);
     initTable(&vm.globals);
 
+    vm.initString = NULL;
+    vm.initString = copyString("init", 4);
+
     defineNative("clock", clockNative);
 }
 
@@ -130,6 +134,13 @@ static bool callValue(Value callee, int argCount) {
             case OBJ_CLASS: {
                 ObjClass* clss = AS_CLASS(callee);
                 vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(clss));
+                Value initializer;
+                if (tableGet(&clss->methods, vm.initString, &initializer)) {
+                    return call(AS_CLOSURE(initializer), argCount);
+                } else if (argCount != 0) {
+                    runtimeError("Expected 0 arguments but got %d.", argCount);
+                    return false;
+                }
                 return true;
             }
             case OBJ_CLOSURE:
