@@ -1,0 +1,22 @@
+class CoffeeMaker {
+  init(coffee) {
+    this.coffee = coffee;
+  }
+
+  brew() {
+    var c;
+    if (this.coffee) {
+        c = "Enjoy your cup of " + this.coffee;
+    }
+
+    // No reusing the grounds!
+    this.coffee = nil;
+    return c;
+  }
+}
+
+var maker = CoffeeMaker("coffee and chicory");
+
+assert "Enjoy your cup of coffee and chicory" == maker.brew();
+assert ! maker.brew();
+assert ! maker.brew();
