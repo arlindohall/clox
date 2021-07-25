@@ -1,0 +1,6 @@
+
+class Failure {
+    init() {
+        return 10;
+    }
+}
