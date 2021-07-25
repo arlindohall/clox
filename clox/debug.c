@@ -7,26 +7,40 @@
 #include "vm.h"
 #include "value.h"
 
-static int byteInstruction(const char*, Chunk*, int);
-static int jumpInstruction(const char*, int, Chunk*, int);
-static int simpleInstruction(const char*, int);
-static int constantInstruction(const char*, Chunk*, int);
 
-void disassembleChunk(Chunk* chunk, const char* name) {
-    printf("== %s ==\n", name);
+static int byteInstruction(const char* name, Chunk* chunk, int offset) {
+    uint8_t slot = chunk->code[offset + 1];
+    printf("%-16s %4d\n", name, slot);
+    return offset + 2;
+}
 
-    for (int offset = 0; offset < chunk->count;) {
-        offset = disassembleInstruction(chunk, offset);
-    }
+static int jumpInstruction(const char* name, int sign, Chunk* chunk, int offset) {
+    uint16_t jump = (uint16_t)(chunk->code[offset + 1] << 8);
+    jump |= chunk->code[offset + 2];
+    printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign*jump);
+    return offset + 3;
+}
 
-#ifdef DEBUG_PRINT_MEMORY
-    printf("= %s/globals =\n", name);
-    tablePrint(&vm.globals);
-    printf("= %s/strings =\n", name);
-    tablePrint(&vm.strings);
-    printf("= %s/constants =\n", name);
-    printValueArray(&chunk->constants);
-#endif
+static int simpleInstruction(const char* name, int offset) {
+    printf("%s\n", name);
+    return offset + 1;
+}
+
+static int constantInstruction(const char* name, Chunk* chunk, int offset) {
+    uint8_t constant = chunk->code[offset + 1];
+    printf("%-16s %4d '", name, constant);
+    printValue(chunk->constants.values[constant]);
+    printf("'\n");
+    return offset + 2;
+}
+
+static int invokeInstruction(const char* name, Chunk* chunk, int offset) {
+    uint8_t methodName = chunk->code[offset + 1];
+    uint8_t argCount = chunk->code[offset + 2];
+    printf("%-16s (%d args) %4d '", name, argCount, methodName);
+    printValue(chunk->constants.values[methodName]);
+    printf("'\n");
+    return offset + 3;
 }
 
 int disassembleInstruction(Chunk* chunk, int offset) {
@@ -125,6 +139,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return simpleInstruction("OP_LESS", offset);
         case OP_CLASS:
             return constantInstruction("OP_CLASS", chunk, offset);
+        case OP_INVOKE:
+            return invokeInstruction("OP_INVOKE", chunk, offset);
         case OP_METHOD:
             return constantInstruction("OP_METHOD", chunk, offset);
         default:
@@ -133,28 +149,19 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     }
 }
 
-static int byteInstruction(const char* name, Chunk* chunk, int offset) {
-    uint8_t slot = chunk->code[offset + 1];
-    printf("%-16s %4d\n", name, slot);
-    return offset + 2;
-}
+void disassembleChunk(Chunk* chunk, const char* name) {
+    printf("== %s ==\n", name);
 
-static int jumpInstruction(const char* name, int sign, Chunk* chunk, int offset) {
-    uint16_t jump = (uint16_t)(chunk->code[offset + 1] << 8);
-    jump |= chunk->code[offset + 2];
-    printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign*jump);
-    return offset + 3;
-}
+    for (int offset = 0; offset < chunk->count;) {
+        offset = disassembleInstruction(chunk, offset);
+    }
 
-static int simpleInstruction(const char* name, int offset) {
-    printf("%s\n", name);
-    return offset + 1;
-}
-
-static int constantInstruction(const char* name, Chunk* chunk, int offset) {
-    uint8_t constant = chunk->code[offset + 1];
-    printf("%-16s %4d '", name, constant);
-    printValue(chunk->constants.values[constant]);
-    printf("'\n");
-    return offset + 2;
+#ifdef DEBUG_PRINT_MEMORY
+    printf("= %s/globals =\n", name);
+    tablePrint(&vm.globals);
+    printf("= %s/strings =\n", name);
+    tablePrint(&vm.strings);
+    printf("= %s/constants =\n", name);
+    printValueArray(&chunk->constants);
+#endif
 }
