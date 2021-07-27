@@ -6,9 +6,9 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [
-                "${workspaceFolder}/clox/common.h",
-                "${workspaceFolder}/clox/object.h",
-                "${workspaceFolder}/clox/memory.h"
+                "${workspaceFolder}/c/clox/common.h",
+                "${workspaceFolder}/c/clox/object.h",
+                "${workspaceFolder}/c/clox/memory.h"
             ],
             "macFrameworkPath": [],
             "compilerPath": "/usr/local/bin/gcc-10",
