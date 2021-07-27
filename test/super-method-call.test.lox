@@ -1,0 +1,35 @@
+
+class A {
+  method() {
+    return "A";
+  }
+}
+
+class B < A {
+  method() {
+    var closure = super.method;
+    return closure(); // Returns "A".
+  }
+}
+
+assert "A" == B().method();
+
+class A {
+  method() {
+    return "A method";
+  }
+}
+
+class B < A {
+  method() {
+    return "B method";
+  }
+
+  test() {
+    return super.method();
+  }
+}
+
+class C < B {}
+
+assert "A method" == C().test();
