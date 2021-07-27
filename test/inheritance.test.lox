@@ -1,0 +1,14 @@
+
+class Duck {
+    speek() {
+        return "quack";
+    }
+}
+
+class Mallard < Duck {
+    identify() {
+        return this.speek() + ", I'm a mallard";
+    }
+}
+
+assert "quack, I'm a mallard" == Mallard().identify();

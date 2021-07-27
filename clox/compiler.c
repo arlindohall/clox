@@ -712,18 +712,34 @@ static void method() {
     emitBytes(OP_METHOD, constant);
 }
 
+static void variable(bool canAssign) {
+    namedVariable(parser.previous, canAssign);
+}
+
 static void classDeclaration() {
     consume(TOKEN_IDENTIFIER, "Expect class name.");
     Token className = parser.previous;
     uint8_t nameConstant = identifierConstant(&parser.previous);
     declareVariable();
 
+    emitBytes(OP_CLASS, nameConstant);
+    defineVariable(nameConstant);
+
     ClassCompiler classCompiler;
     classCompiler.enclosing = currentClass;
     currentClass = &classCompiler;
 
-    emitBytes(OP_CLASS, nameConstant);
-    defineVariable(nameConstant);
+    if (match(TOKEN_LESS)) {
+        consume(TOKEN_IDENTIFIER, "Expect superclass name.");
+        variable(false);
+
+        if (identifiersEqual(&className, &parser.previous)) {
+            error("A class can't inherit from itself.");
+        }
+
+        namedVariable(className, false);
+        emitByte(OP_INHERIT);
+    }
 
     namedVariable(className, false);
     consume(TOKEN_LEFT_BRACE, "Expect '{' before class body.");
@@ -921,10 +937,6 @@ static void namedVariable(Token name, bool canAssign) {
     } else {
         emitBytes(getOp, arg);
     }
-}
-
-static void variable(bool canAssign) {
-    namedVariable(parser.previous, canAssign);
 }
 
 static void this_(bool canAssign) {
