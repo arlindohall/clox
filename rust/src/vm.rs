@@ -1,3 +1,5 @@
+use crate::compiler::Compiler;
+use crate::value::Value;
 
 /// # Virtual Machine
 ///
@@ -16,7 +18,11 @@
 /// let vm = VM::default();
 /// vm.interpret("print \"Hello, world!\"".to_string());
 /// ```
-pub struct VM {}
+#[derive(Debug)]
+pub struct VM {
+    compilers: Vec<Compiler>,
+    stack: Vec<Value>,
+}
 
 /// I just did this because Clippy told me to.
 impl Default for VM {
@@ -33,13 +39,22 @@ impl VM {
     /// pointer (which will point at the first instruction in
     /// the top-level-function that the script compiles to).
     pub fn new() -> VM {
-        VM {}
+        VM {
+            compilers: Vec::new(),
+            stack: Vec::new(),
+        }
     }
 
     /// Compile the script or line of code into bytecode, then
     /// execute the bytecode, all in the context of the VM that
     /// is set up with [new](#method.new).
-    pub fn interpret(&self, statement: String) {
-        println!("Running statement '{}'", statement);
+    pub fn interpret(&mut self, statement: String) {
+        let mut compiler = Compiler {};
+
+        // Pass in the VM that calls the compiler so that the
+        // compiler can swap itself out for a child compiler
+        let function = compiler.compile(self, statement);
+
+        println!("Compiled function {:?}", function);
     }
 }

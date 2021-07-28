@@ -1,4 +1,8 @@
-use std::{error::Error, fs::File, io::{BufRead, Read, Write}};
+use std::{
+    error::Error,
+    fs::File,
+    io::{BufRead, Read, Write},
+};
 
 use loxvm::vm::VM;
 
@@ -9,9 +13,7 @@ use loxvm::vm::VM;
 /// langauge, and makes the rest of the VM, compiler, and related
 /// constructs easier to test.
 fn main() -> Result<(), Box<dyn Error>> {
-    let lox = Lox {
-        vm: VM::new()
-    };
+    let mut lox = Lox { vm: VM::new() };
 
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() == 1 {
@@ -45,7 +47,7 @@ impl Lox {
     ///
     /// We rely on the [VM](../loxvm/vm/struct.VM.html) struct to
     /// track any state.
-    fn repl(self) -> Result<(), Box<dyn Error>> {
+    fn repl(&mut self) -> Result<(), Box<dyn Error>> {
         let stdin = std::io::stdin();
         let lock = stdin.lock();
 
@@ -62,7 +64,7 @@ impl Lox {
     /// the interpreter will end up stripping all whitespace,
     /// which means newlines are ignored and you can use
     /// multiline statements in scripts.
-    fn run_file(self, file_name: &str) -> Result<(), Box<dyn Error>> {
+    fn run_file(&mut self, file_name: &str) -> Result<(), Box<dyn Error>> {
         let mut contents = String::new();
         let mut file = File::open(file_name)?;
 
