@@ -1,4 +1,4 @@
-use std::{error::Error, io::{BufRead, Write}};
+use std::{error::Error, fs::File, io::{BufRead, Read, Write}};
 
 use loxvm::vm::VM;
 
@@ -63,7 +63,13 @@ impl Lox {
     /// which means newlines are ignored and you can use
     /// multiline statements in scripts.
     fn run_file(self, file_name: &str) -> Result<(), Box<dyn Error>> {
-        println!("Running {}", file_name);
+        let mut contents = String::new();
+        let mut file = File::open(file_name)?;
+
+        file.read_to_string(&mut contents)?;
+
+        self.vm.interpret(contents);
+
         Ok(())
     }
 }
