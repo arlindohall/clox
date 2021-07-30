@@ -1,4 +1,4 @@
-/// # Internal Lox value representation
+/// Internal Lox value representation
 ///
 /// This enum represents all the kinds of values that can
 /// go on the Lox runtime stack. The values can also be

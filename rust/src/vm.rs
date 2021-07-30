@@ -1,7 +1,7 @@
 use crate::compiler::Compiler;
 use crate::value::Value;
 
-/// # Virtual Machine
+/// Lox Virtual Machine.
 ///
 /// This struct contains the VM runtime properties that
 /// track the stack and objects.
@@ -19,26 +19,26 @@ use crate::value::Value;
 /// vm.interpret("print \"Hello, world!\"".to_string());
 /// ```
 #[derive(Debug)]
-pub struct VM {
-    compilers: Vec<Compiler>,
+pub struct VM<'a> {
+    compilers: Vec<Compiler<'a>>,
     stack: Vec<Value>,
 }
 
 /// I just did this because Clippy told me to.
-impl Default for VM {
+impl <'a> Default for VM<'a> {
     fn default() -> Self {
         VM::new()
     }
 }
 
-impl VM {
+impl <'a> VM<'a> {
     /// Create a new VM instance and set up its compiler
     /// which will produce the bytecode.
     ///
     /// Also fully initialize its memory, stack, and instruction
     /// pointer (which will point at the first instruction in
     /// the top-level-function that the script compiles to).
-    pub fn new() -> VM {
+    pub fn new() -> VM<'a> {
         VM {
             compilers: Vec::new(),
             stack: Vec::new(),
@@ -48,13 +48,16 @@ impl VM {
     /// Compile the script or line of code into bytecode, then
     /// execute the bytecode, all in the context of the VM that
     /// is set up with [new](#method.new).
-    pub fn interpret(&mut self, statement: String) {
-        let mut compiler = Compiler {};
+    pub fn interpret(&mut self, statement: &str) {
+        let mut compiler = Compiler::new(self);
 
         // Pass in the VM that calls the compiler so that the
         // compiler can swap itself out for a child compiler
-        let function = compiler.compile(self, statement);
+        let function = compiler.compile(statement);
 
-        println!("Compiled function {:?}", function);
+        match function {
+            Ok(func) => println!("Compiled function {:?}", func),
+            Err(error) => println!("Whoopsie-daisy {}", error),
+        }
     }
 }

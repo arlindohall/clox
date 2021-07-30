@@ -6,7 +6,7 @@ use std::{
 
 use loxvm::vm::VM;
 
-/// # Entry point for the lox interpreter
+/// Entry point for the lox interpreter
 ///
 /// This function plust the Lox struct handles most of the IO
 /// which leaves the rest of the implementaiton to deal with the
@@ -29,8 +29,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// The top-level language, including the IO logic for
 /// the [REPL](#method.repl) and script interpreter.
 /// It has functions for running the REPL aand files.
-struct Lox {
-    vm: VM,
+struct Lox<'a> {
+    vm: VM<'a>,
 }
 
 /// A private helper that produces the prompt in the REPL
@@ -39,7 +39,7 @@ fn prompt() -> Result<(), std::io::Error> {
     std::io::stdout().flush()
 }
 
-impl Lox {
+impl <'a> Lox<'a> {
     /// Just read a line at a time from stdin. If an error
     /// happens either while reading a line or while executing
     /// it, then we'll just fail and exit immediately. Otherwise
@@ -53,7 +53,7 @@ impl Lox {
 
         prompt()?;
         for line in lock.lines() {
-            self.vm.interpret(line?);
+            self.vm.interpret(line?.as_str());
             prompt()?;
         }
 
@@ -70,7 +70,7 @@ impl Lox {
 
         file.read_to_string(&mut contents)?;
 
-        self.vm.interpret(contents);
+        self.vm.interpret(contents.as_str());
 
         Ok(())
     }
