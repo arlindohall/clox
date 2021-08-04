@@ -25,13 +25,13 @@ pub struct VM<'a> {
 }
 
 /// I just did this because Clippy told me to.
-impl <'a> Default for VM<'a> {
+impl<'a> Default for VM<'a> {
     fn default() -> Self {
         VM::new()
     }
 }
 
-impl <'a> VM<'a> {
+impl<'a> VM<'a> {
     /// Create a new VM instance and set up its compiler
     /// which will produce the bytecode.
     ///

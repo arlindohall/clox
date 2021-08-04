@@ -39,7 +39,7 @@ fn prompt() -> Result<(), std::io::Error> {
     std::io::stdout().flush()
 }
 
-impl <'a> Lox<'a> {
+impl<'a> Lox<'a> {
     /// Just read a line at a time from stdin. If an error
     /// happens either while reading a line or while executing
     /// it, then we'll just fail and exit immediately. Otherwise

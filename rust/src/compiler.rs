@@ -13,7 +13,7 @@ use crate::vm::VM;
 pub struct Compiler<'a> {
     vm: &'a VM<'a>,
     scanner: Scanner<'a>,
-    parser: Parser,
+    parser: Parser<'a>,
 }
 
 /// Scanner for turning a lox lang string into a list of tokens.
@@ -28,8 +28,11 @@ struct Scanner<'a> {
 
 /// The parser that does all the work creating the bytecode.
 #[derive(Debug)]
-struct Parser {
-    had_error: bool
+struct Parser<'a> {
+    had_error: bool,
+
+    current: Token<'a>,
+    previous: Token<'a>,
 }
 
 /// A static function.
@@ -44,12 +47,43 @@ struct Parser {
 #[derive(Debug)]
 pub struct Function {}
 
-use Token::*;
-enum Token {
-    TokenEof
+use TokenType::*;
+
+/// The type of token that was scanned.
+///
+/// This is not a structure enum because every token has the same properties
+/// so there's no need for separate structures.
+#[derive(Clone, Debug, PartialEq)]
+#[repr(u8)]
+enum TokenType {
+    TokenEof,
+    TokenError,
 }
 
-impl <'a> Compiler<'a> {
+/// The actual token scanned by the scanner/parser.
+///
+/// This struct tracks the type of token, so we can match on the type,
+/// the source of the token (used for error reporting and for named constants),
+/// and the line number (used for error reporting).
+#[derive(Clone, Debug)]
+struct Token<'a> {
+    type_: TokenType,
+    source: &'a str,
+    line: usize,
+}
+
+/// The default token is used when initializing the parser.
+impl<'a> Default for Token<'a> {
+    fn default() -> Self {
+        Token {
+            type_: TokenEof,
+            source: "",
+            line: 0,
+        }
+    }
+}
+
+impl<'a> Compiler<'a> {
     /// Create a new compiler with empty source and no errors.
     ///
     /// This method also initializes the scanner and parser, and
@@ -57,12 +91,12 @@ impl <'a> Compiler<'a> {
     pub fn new(vm: &'a VM) -> Compiler<'a> {
         Compiler {
             vm,
-            scanner: Scanner {
-                source: ""
-            },
+            scanner: Scanner { source: "" },
             parser: Parser {
-                had_error: false
-            }
+                had_error: false,
+                current: Default::default(),
+                previous: Default::default(),
+            },
         }
     }
 
@@ -71,12 +105,8 @@ impl <'a> Compiler<'a> {
     /// The statement passed in can be a group of statements separated
     /// by a ';' character, as specified in Lox grammar.
     pub fn compile(&mut self, statement: &'a str) -> Result<Function, Box<dyn Error>> {
-        self.scanner = Scanner {
-            source: statement,
-        };
-        self.parser = Parser {
-            had_error: false,
-        };
+        self.scanner.source = statement;
+        self.parser.had_error = false;
 
         self.advance();
 
@@ -84,12 +114,42 @@ impl <'a> Compiler<'a> {
             self.declaration();
         }
 
-
         Ok(self.end_compiler())
     }
 
-    fn advance(&mut self) {}
-    fn match_(&self, _token: Token) -> bool { true }
+    /// Move the parser forward by one token.
+    ///
+    /// This calls out to the scanner (which the parser owns) to
+    /// scan through the source, passing whitespace, until it has scanned
+    /// a single token.
+    fn advance(&mut self) {
+        std::mem::swap(&mut self.parser.previous, &mut self.parser.current);
+        self.parser.current = self.scanner.scan_token();
+
+        loop {
+            self.parser.current = self.scanner.scan_token();
+
+            if self.parser.current.type_ != TokenError {
+                break;
+            }
+
+            self.error_at_current();
+        }
+    }
+
+    fn match_(&self, _type_: TokenType) -> bool {
+        true
+    }
     fn declaration(&mut self) {}
-    fn end_compiler(&mut self) -> Function { Function {} }
+    fn end_compiler(&mut self) -> Function {
+        Function {}
+    }
+    fn error_at_current(&mut self) {}
+}
+
+impl <'a, 'b> Scanner<'a> {
+    /// Scan a single token from the source into the scanner.
+    fn scan_token(&'a self) -> Token<'b> {
+        Default::default()
+    }
 }
