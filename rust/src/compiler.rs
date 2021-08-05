@@ -24,6 +24,11 @@ pub struct Compiler<'a> {
 #[derive(Debug)]
 struct Scanner<'a> {
     source: &'a str,
+
+    start: usize,
+    current: usize,
+
+    line: usize,
 }
 
 /// The parser that does all the work creating the bytecode.
@@ -91,7 +96,12 @@ impl<'a> Compiler<'a> {
     pub fn new(vm: &'a VM) -> Compiler<'a> {
         Compiler {
             vm,
-            scanner: Scanner { source: "" },
+            scanner: Scanner {
+                source: "",
+                start: 0,
+                current: 0,
+                line: 0,
+            },
             parser: Parser {
                 had_error: false,
                 current: Default::default(),
@@ -147,9 +157,61 @@ impl<'a> Compiler<'a> {
     fn error_at_current(&mut self) {}
 }
 
-impl <'a, 'b> Scanner<'a> {
+impl<'a, 'b> Scanner<'a> {
     /// Scan a single token from the source into the scanner.
-    fn scan_token(&'a self) -> Token<'b> {
+    fn scan_token(&mut self) -> Token<'b> {
+        self.skip_whitespace();
+
+        self.start = self.current;
+
+        if self.is_at_end() {
+            return Token {
+                type_: TokenEof,
+                source: "",
+                line: self.line,
+            };
+        }
+
         Default::default()
+    }
+
+    /// Move the pointer in the source string forward past whitespace.
+    fn skip_whitespace(&mut self) {
+        loop {
+            let c = self.peek();
+
+            match c {
+                ' ' | '\t' | '\r' => self.advance(),
+                '\n' => {
+                    self.line += 1;
+                    self.advance();
+                }
+                '/' => {
+                    if self.peek_next() == '/' {
+                        loop {
+                            if self.peek() == '\n' || self.is_at_end() {
+                                break;
+                            } else {
+                                self.advance();
+                            }
+                        }
+                    } else {
+                        return;
+                    }
+                }
+                _ => return,
+            }
+        }
+    }
+
+    fn advance(&mut self) {}
+    fn peek(&self) -> char {
+        ' '
+    }
+    fn peek_next(&self) -> char {
+        ' '
+    }
+    fn is_at_end(&self) -> bool {
+        true
     }
 }
