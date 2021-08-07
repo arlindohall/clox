@@ -177,7 +177,7 @@ impl<'a, 'b> Scanner<'a> {
 
     /// Move the pointer in the source string forward past whitespace.
     fn skip_whitespace(&mut self) {
-        loop {
+        'whitespace: loop {
             let c = self.peek();
 
             match c {
@@ -188,18 +188,20 @@ impl<'a, 'b> Scanner<'a> {
                 }
                 '/' => {
                     if self.peek_next() == '/' {
-                        loop {
+                        'comment: loop {
                             if self.peek() == '\n' || self.is_at_end() {
-                                break;
+                                break 'comment;
                             } else {
                                 self.advance();
                             }
                         }
                     } else {
-                        return;
+                        continue 'whitespace;
                     }
                 }
-                _ => return,
+                // The only place where we break is when something
+                // is not whitespace
+                _ => break 'whitespace,
             }
         }
     }
