@@ -12,6 +12,7 @@ use crate::vm::VM;
 #[derive(Debug)]
 pub struct Compiler<'a> {
     vm: &'a VM<'a>,
+
     scanner: Scanner<'a>,
     parser: Parser<'a>,
 }
@@ -38,6 +39,8 @@ struct Parser<'a> {
 
     current: Token<'a>,
     previous: Token<'a>,
+
+    panic_mode: bool,
 }
 
 /// A static function.
@@ -61,8 +64,11 @@ use TokenType::*;
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 enum TokenType {
+    TokenClass,
     TokenEof,
     TokenError,
+    TokenFun,
+    TokenVar,
 }
 
 /// The actual token scanned by the scanner/parser.
@@ -106,6 +112,7 @@ impl<'a> Compiler<'a> {
                 had_error: false,
                 current: Default::default(),
                 previous: Default::default(),
+                panic_mode: false,
             },
         }
     }
@@ -158,11 +165,31 @@ impl<'a> Compiler<'a> {
         self.parser.current.type_ == type_
     }
 
-    fn declaration(&mut self) {}
+    fn declaration(&mut self) {
+        if self.match_(TokenClass) {
+            self.class_declaration();
+        } else if self.match_(TokenFun) {
+            self.fun_declaration();
+        } else if self.match_(TokenVar) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
+        if self.parser.panic_mode {
+            self.synchronize();
+        }
+    }
+
     fn end_compiler(&mut self) -> Function {
         Function {}
     }
     fn error_at_current(&mut self) {}
+    fn class_declaration(&self) {}
+    fn fun_declaration(&self) {}
+    fn var_declaration(&self) {}
+    fn statement(&self) {}
+    fn synchronize(&mut self) {}
 }
 
 impl<'a, 'b> Scanner<'a> {
