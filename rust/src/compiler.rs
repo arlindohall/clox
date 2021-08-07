@@ -147,9 +147,17 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn match_(&self, _type_: TokenType) -> bool {
-        true
+    fn match_(&mut self, type_: TokenType) -> bool {
+        self.check(type_) || {
+            self.advance();
+            false
+        }
     }
+
+    fn check(&self, type_: TokenType) -> bool {
+        self.parser.current.type_ == type_
+    }
+
     fn declaration(&mut self) {}
     fn end_compiler(&mut self) -> Function {
         Function {}
