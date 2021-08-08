@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use crate::vm::VM;
+use crate::vm::Op::*;
 
 /// Compiler used for a single function or script.
 ///
@@ -15,6 +16,8 @@ pub struct Compiler<'a> {
 
     scanner: Scanner<'a>,
     parser: Parser<'a>,
+
+    scope_depth: usize,
 }
 
 /// Scanner for turning a lox lang string into a list of tokens.
@@ -67,7 +70,9 @@ enum TokenType {
     TokenClass,
     TokenEof,
     TokenError,
+    TokenEqual,
     TokenFun,
+    TokenSemicolon,
     TokenVar,
 }
 
@@ -114,6 +119,7 @@ impl<'a> Compiler<'a> {
                 previous: Default::default(),
                 panic_mode: false,
             },
+            scope_depth: 0,
         }
     }
 
@@ -181,15 +187,40 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn end_compiler(&mut self) -> Function {
-        Function {}
+    fn var_declaration(&mut self) {
+        let global = self.parse_variable("Expect variable name.");
+
+        if self.match_(TokenEqual) {
+            self.expression();
+        } else {
+            self.emit_byte(OpNil as u8);
+        }
+        self.consume(TokenSemicolon, "Expect ';' after variable declaration.");
+
+        self.define_variable(global);
     }
-    fn error_at_current(&mut self) {}
-    fn class_declaration(&self) {}
-    fn fun_declaration(&self) {}
-    fn var_declaration(&self) {}
-    fn statement(&self) {}
-    fn synchronize(&mut self) {}
+
+    fn define_variable(&mut self, global: u8) {
+        if self.scope_depth > 0 {
+            self.mark_initialized();
+            return;
+        }
+
+        self.emit_bytes(OpDefineGlobal as u8, global);
+    }
+
+    fn mark_initialized(&self) { todo!() }
+    fn consume(&self, _token_type: TokenType, _message: &str) { todo!() }
+    fn expression(&self) { todo!() }
+    fn emit_bytes(&self, _op1: u8, _op2: u8) { todo!() }
+    fn emit_byte(&self, _op: u8) { todo!() }
+    fn parse_variable(&mut self, _message: &str) -> u8 { todo!() }
+    fn class_declaration(&self) { todo!() }
+    fn fun_declaration(&self) { todo!() }
+    fn statement(&self) { todo!() }
+    fn end_compiler(&mut self) -> Function { todo!() }
+    fn error_at_current(&mut self) { todo!() }
+    fn synchronize(&mut self) { todo!() }
 }
 
 impl<'a, 'b> Scanner<'a> {

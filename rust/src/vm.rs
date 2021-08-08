@@ -24,6 +24,12 @@ pub struct VM<'a> {
     stack: Vec<Value>,
 }
 
+#[repr(u8)]
+pub enum Op {
+    OpDefineGlobal,
+    OpNil,
+}
+
 /// I just did this because Clippy told me to.
 impl<'a> Default for VM<'a> {
     fn default() -> Self {
