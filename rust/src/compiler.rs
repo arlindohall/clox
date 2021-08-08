@@ -179,10 +179,21 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    /// Test the current token type, used to simplify this check.
     fn check(&self, type_: TokenType) -> bool {
         self.parser.current.type_ == type_
     }
 
+    /// Compile a declaration, or a lower precedence statement.
+    ///
+    /// This is the top-level definition in Lox's grammar.
+    ///
+    /// ```lox-grammar
+    ///  declaration -> class_declaration
+    ///                 | fun_declaration
+    ///                 | var_declaration
+    ///                 | statement`
+    /// ```
     fn declaration(&mut self) {
         if self.match_(TokenClass) {
             self.class_declaration();
@@ -199,8 +210,31 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    /// Compile a variable declaration.
+    ///
+    /// The variable declaration syntax is:
+    ///
+    /// `var_declaration -> 'var' variable_name [ '=' expression ] ';'`
+    ///
+    /// An example would be: `var x = 10;`
+    ///
+    /// The variable declaration compiles down to the following bytecode
+    /// in the case of a global variable definition, for example.
+    ///
+    /// ```lox
+    /// var x;
+    /// ```
+    ///
+    /// ```lox-bytecode
+    /// Constants:
+    ///     1: "x"
+    /// Code:
+    ///     OpNil
+    ///     OpDefineGlobal
+    ///     1
+    /// ```
     fn var_declaration(&mut self) {
-        let global = self.parse_variable("Expect variable name.");
+        let name = self.parse_variable("Expect variable name.");
 
         if self.match_(TokenEqual) {
             self.expression();
@@ -209,16 +243,20 @@ impl<'a> Compiler<'a> {
         }
         self.consume(TokenSemicolon, "Expect ';' after variable declaration.");
 
-        self.define_variable(global);
+        self.define_variable(name);
     }
 
-    fn define_variable(&mut self, global: u8) {
+    /// Define either a local or global variable depending on the scope.
+    ///
+    /// Emits bytecode for variable definition, assuming the bytecode prior to
+    /// this leaves that value on the stack.
+    fn define_variable(&mut self, name: u8) {
         if self.scope_depth > 0 {
             self.mark_initialized();
             return;
         }
 
-        self.emit_bytes(OpDefineGlobal as u8, global);
+        self.emit_bytes(OpDefineGlobal as u8, name);
     }
 
     fn mark_initialized(&self) {
