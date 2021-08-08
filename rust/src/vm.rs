@@ -15,8 +15,8 @@ use crate::value::Value;
 ///
 /// ```
 /// # use loxvm::vm::VM;
-/// let vm = VM::default();
-/// vm.interpret("print \"Hello, world!\"".to_string());
+/// let mut vm = VM::default();
+/// vm.interpret("print \"Hello, world!\"");
 /// ```
 #[derive(Debug)]
 pub struct VM<'a> {

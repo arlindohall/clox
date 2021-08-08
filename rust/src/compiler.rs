@@ -1,7 +1,7 @@
 use std::error::Error;
 
-use crate::vm::VM;
 use crate::vm::Op::*;
+use crate::vm::VM;
 
 /// Compiler used for a single function or script.
 ///
@@ -160,6 +160,18 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    /// If the current (next to be compiled) token matches, then advance
+    ///
+    /// Return whether the token was matched, and the skip-ahead
+    /// behavior is sort of hidden from the caller. But that lets the
+    /// caller do cool things like the following:
+    ///
+    /// ```ignore
+    /// let compiler = Compiler::new();
+    /// if compiler.match_(TokenEof) {
+    ///     println!("End of file");
+    /// }
+    /// ```
     fn match_(&mut self, type_: TokenType) -> bool {
         self.check(type_) || {
             self.advance();
@@ -209,18 +221,53 @@ impl<'a> Compiler<'a> {
         self.emit_bytes(OpDefineGlobal as u8, global);
     }
 
-    fn mark_initialized(&self) { todo!() }
-    fn consume(&self, _token_type: TokenType, _message: &str) { todo!() }
-    fn expression(&self) { todo!() }
-    fn emit_bytes(&self, _op1: u8, _op2: u8) { todo!() }
-    fn emit_byte(&self, _op: u8) { todo!() }
-    fn parse_variable(&mut self, _message: &str) -> u8 { todo!() }
-    fn class_declaration(&self) { todo!() }
-    fn fun_declaration(&self) { todo!() }
-    fn statement(&self) { todo!() }
-    fn end_compiler(&mut self) -> Function { todo!() }
-    fn error_at_current(&mut self) { todo!() }
-    fn synchronize(&mut self) { todo!() }
+    fn mark_initialized(&self) {
+        todo!("mark the current token/variable as initialized")
+    }
+
+    fn consume(&self, _token_type: TokenType, _message: &str) {
+        todo!("advance one token and discard")
+    }
+
+    fn expression(&self) {
+        todo!("compile one expression to bytecode (putting on stack)")
+    }
+
+    fn emit_bytes(&self, _op1: u8, _op2: u8) {
+        todo!("emit two bytes of bytecode")
+    }
+
+    fn emit_byte(&self, _op: u8) {
+        todo!("emit one byte")
+    }
+
+    fn parse_variable(&mut self, _message: &str) -> u8 {
+        todo!("parse one variable name and return the constant table address")
+    }
+
+    fn class_declaration(&self) {
+        todo!("compile a class definition along with methods")
+    }
+
+    fn fun_declaration(&self) {
+        todo!("compile a single function definition")
+    }
+
+    fn statement(&self) {
+        todo!("compile a single non-definition statement")
+    }
+
+    fn end_compiler(&mut self) -> Function {
+        todo!("return this compiler's bytecode as a function object")
+    }
+
+    fn error_at_current(&mut self) {
+        todo!("emit a compiler error and continue")
+    }
+
+    fn synchronize(&mut self) {
+        todo!("recover after an error")
+    }
 }
 
 impl<'a, 'b> Scanner<'a> {
@@ -247,7 +294,9 @@ impl<'a, 'b> Scanner<'a> {
             let c = self.peek();
 
             match c {
-                ' ' | '\t' | '\r' => self.advance(),
+                ' ' | '\t' | '\r' => {
+                    self.advance();
+                }
                 '\n' => {
                     self.line += 1;
                     self.advance();
@@ -272,14 +321,30 @@ impl<'a, 'b> Scanner<'a> {
         }
     }
 
-    fn advance(&mut self) {}
+    fn advance(&mut self) -> char {
+        todo!("increment parser one character")
+    }
+
     fn peek(&self) -> char {
-        ' '
+        todo!("get the current character")
     }
+
     fn peek_next(&self) -> char {
-        ' '
+        todo!("get the next character")
     }
+
     fn is_at_end(&self) -> bool {
-        true
+        todo!("check if the pointer is equal to the source length")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_match_end_of_file() {
+        let mut vm = VM::new();
+        vm.interpret("print \"Hello world\";");
     }
 }
