@@ -7,30 +7,45 @@ use TokenType::*;
 #[derive(Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum TokenType {
+    TokenAnd,
+    TokenAssert,
     TokenBang,
     TokenBangEqual,
     TokenClass,
     TokenComma,
     TokenDot,
+    TokenElse,
     TokenEof,
     TokenEqual,
     TokenEqualEqual,
     TokenError,
+    TokenFalse,
+    TokenFor,
     TokenFun,
     TokenGreater,
     TokenGreaterEqual,
+    TokenIdentifier,
+    TokenIf,
     TokenLeftBrace,
     TokenLeftParen,
     TokenLess,
     TokenLessEqual,
     TokenMinus,
+    TokenNil,
+    TokenOr,
     TokenPlus,
+    TokenPrint,
+    TokenReturn,
     TokenRightBrace,
     TokenRightParen,
     TokenSemicolon,
     TokenSlash,
     TokenStar,
+    TokenSuper,
+    TokenThis,
+    TokenTrue,
     TokenVar,
+    TokenWhile,
 }
 
 /// The actual token scanned by the scanner/parser.
@@ -79,7 +94,7 @@ impl<'a> Default for Scanner<'a> {
             source: "",
             start: 0,
             current: 0,
-            line: 0,
+            line: 1,
         }
     }
 }
@@ -97,9 +112,9 @@ impl<'a, 'b> Scanner<'a> {
 
         let c = self.advance();
 
-        if self.is_alpha(c) {
+        if Self::is_alpha(self.previous()) {
             self.identifier()
-        } else if self.is_digit(c) {
+        } else if Self::is_digit(self.previous()) {
             self.number()
         } else {
             match c {
@@ -143,7 +158,8 @@ impl<'a, 'b> Scanner<'a> {
                     }
                 }
                 '"' => self.string(),
-                _ => todo!("incomplete token match"),
+                '\0' => self.make_token(TokenEof),
+                _ => panic!("Unrecognized character {}", self.previous()),
             }
         }
     }
@@ -158,7 +174,77 @@ impl<'a, 'b> Scanner<'a> {
     }
 
     fn identifier(&mut self) -> Token {
-        todo!("scan an identifier name")
+        loop {
+            if !(Self::is_alpha(self.peek()) || Self::is_digit(self.peek())) {
+                break;
+            } else {
+                self.advance();
+            }
+        }
+
+        self.make_token(self.identifier_type())
+    }
+
+    fn identifier_type(&self) -> TokenType {
+        match self.peek_nth(self.start) {
+            'a' => {
+                if self.current - self.start > 1 {
+                    match self.peek_nth(self.start + 1) {
+                        'n' => self.check_keyword(2, "d", TokenAnd),
+                        's' => self.check_keyword(2, "sert", TokenAssert),
+                        _ => TokenIdentifier,
+                    }
+                } else {
+                    TokenIdentifier
+                }
+            }
+            'c' => self.check_keyword(1, "lass", TokenClass),
+            'e' => self.check_keyword(1, "lse", TokenElse),
+            'f' => {
+                if self.current - self.start > 1 {
+                    match self.peek_nth(self.start + 1) {
+                        'a' => self.check_keyword(2, "lse", TokenFalse),
+                        'o' => self.check_keyword(2, "r", TokenFor),
+                        'u' => self.check_keyword(2, "n", TokenFun),
+                        _ => TokenIdentifier,
+                    }
+                } else {
+                    TokenIdentifier
+                }
+            }
+            'i' => self.check_keyword(1, "f", TokenIf),
+            'n' => self.check_keyword(1, "il", TokenNil),
+            'o' => self.check_keyword(1, "r", TokenOr),
+            'p' => self.check_keyword(1, "rint", TokenPrint),
+            'r' => self.check_keyword(1, "eturn", TokenReturn),
+            's' => self.check_keyword(1, "uper", TokenSuper),
+            't' => {
+                if self.current - self.start > 1 {
+                    match self.peek_nth(self.start + 1) {
+                        'h' => self.check_keyword(2, "is", TokenThis),
+                        'r' => self.check_keyword(2, "ue", TokenTrue),
+                        _ => TokenIdentifier,
+                    }
+                } else {
+                    TokenIdentifier
+                }
+            }
+            'v' => self.check_keyword(1, "ar", TokenVar),
+            'w' => self.check_keyword(1, "hile", TokenWhile),
+            _ => TokenIdentifier,
+        }
+    }
+
+    fn check_keyword(&self, start: usize, matches: &str, type_: TokenType) -> TokenType {
+        let mut idx = 0;
+        for ch in matches.chars() {
+            if ch != self.peek_nth(start + idx) {
+                return TokenIdentifier;
+            }
+            idx += 1;
+        }
+
+        type_
     }
 
     fn number(&mut self) -> Token {
@@ -206,27 +292,63 @@ impl<'a, 'b> Scanner<'a> {
         }
     }
 
-    fn is_alpha(&self, _c: char) -> bool {
-        todo!("check if this is an alpha character")
+    fn is_alpha(c: char) -> bool {
+        match c {
+            'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n'
+            | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | '_' => true,
+            _ => false,
+        }
     }
 
-    fn is_digit(&self, _c: char) -> bool {
-        todo!("check if the current character is a digit")
+    fn is_digit(c: char) -> bool {
+        match c {
+            '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => true,
+            _ => false,
+        }
     }
 
     fn advance(&mut self) -> char {
-        todo!("increment parser one character")
+        self.current += 1;
+        self.previous()
+    }
+
+    fn previous(&self) -> char {
+        self.peek_nth(self.current - 1)
     }
 
     fn peek(&self) -> char {
-        self.source.chars().nth(self.current).unwrap()
+        self.source.chars().nth(self.current).unwrap_or('\0')
     }
 
     fn peek_next(&self) -> char {
-        todo!("get the next character")
+        self.source.chars().nth(self.current + 1).unwrap_or('\0')
+    }
+
+    fn peek_nth(&self, i: usize) -> char {
+        self.source.chars().nth(i).unwrap_or('\0')
     }
 
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_scan_variable_declaration() {
+        let mut scanner = Scanner {
+            source: "var x;",
+            start: 0,
+            current: 0,
+            line: 1,
+        };
+
+        assert_eq!(TokenVar, scanner.scan_token().type_);
+        assert_eq!(TokenIdentifier, scanner.scan_token().type_);
+        assert_eq!(TokenSemicolon, scanner.scan_token().type_);
+        assert_eq!(TokenEof, scanner.scan_token().type_);
     }
 }
