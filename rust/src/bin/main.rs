@@ -13,7 +13,7 @@ use loxvm::vm::VM;
 /// langauge, and makes the rest of the VM, compiler, and related
 /// constructs easier to test.
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut lox = Lox { vm: VM::new() };
+    let mut lox = Lox { vm: VM::default() };
 
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() == 1 {

@@ -28,34 +28,31 @@ pub struct VM<'a> {
 pub enum Op {
     OpDefineGlobal,
     OpNil,
+    OpReturn,
 }
 
 /// I just did this because Clippy told me to.
 impl<'a> Default for VM<'a> {
-    fn default() -> Self {
-        VM::new()
-    }
-}
-
-impl<'a> VM<'a> {
     /// Create a new VM instance and set up its compiler
     /// which will produce the bytecode.
     ///
     /// Also fully initialize its memory, stack, and instruction
     /// pointer (which will point at the first instruction in
     /// the top-level-function that the script compiles to).
-    pub fn new() -> VM<'a> {
+    fn default() -> Self {
         VM {
             compilers: Vec::new(),
             stack: Vec::new(),
         }
     }
+}
 
+impl<'a> VM<'a> {
     /// Compile the script or line of code into bytecode, then
     /// execute the bytecode, all in the context of the VM that
     /// is set up with [new](#method.new).
     pub fn interpret(&mut self, statement: &str) {
-        let mut compiler = Compiler::new(self);
+        let compiler = Compiler::new(self);
 
         // Pass in the VM that calls the compiler so that the
         // compiler can swap itself out for a child compiler
