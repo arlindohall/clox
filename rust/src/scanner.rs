@@ -65,7 +65,7 @@ pub struct Token {
 impl Default for Token {
     fn default() -> Self {
         Token {
-            type_: TokenEof,
+            type_: TokenNil,
             start: 0,
             length: 0,
             line: 0,

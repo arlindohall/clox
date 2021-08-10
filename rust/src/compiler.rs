@@ -64,8 +64,8 @@ impl<'a> Compiler<'a> {
             scanner: Scanner::default(),
             parser: Parser {
                 had_error: false,
-                current: Default::default(),
-                previous: Default::default(),
+                current: Token::default(),
+                previous: Token::default(),
                 panic_mode: false,
             },
             scope_depth: 0,
@@ -97,7 +97,6 @@ impl<'a> Compiler<'a> {
     /// a single token.
     fn advance(&mut self) {
         std::mem::swap(&mut self.parser.previous, &mut self.parser.current);
-        self.parser.current = self.scanner.scan_token();
 
         loop {
             self.parser.current = self.scanner.scan_token();
@@ -123,10 +122,13 @@ impl<'a> Compiler<'a> {
     /// }
     /// ```
     fn match_(&mut self, type_: TokenType) -> bool {
-        self.check(type_) || {
+        let matches = self.check(type_);
+
+        if matches {
             self.advance();
-            false
         }
+
+        matches
     }
 
     /// Test the current token type, used to simplify this check.
