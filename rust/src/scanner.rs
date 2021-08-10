@@ -100,7 +100,10 @@ impl<'a> Default for Scanner<'a> {
 }
 
 impl<'a, 'b> Scanner<'a> {
-    /// Scan a single token from the source into the scanner.
+    /// Scan a single token from the source and return.
+    ///
+    /// This is where we ignore whitespace and scan identifiers,
+    /// special characters, reserved words, and number/string literals.
     pub fn scan_token(&mut self) -> Token {
         self.skip_whitespace();
 
@@ -164,6 +167,7 @@ impl<'a, 'b> Scanner<'a> {
         }
     }
 
+    /// Helper to create a token from the last scanned item.
     fn make_token(&self, type_: TokenType) -> Token {
         Token {
             type_,
@@ -173,6 +177,12 @@ impl<'a, 'b> Scanner<'a> {
         }
     }
 
+    /// Scan an identifier.
+    ///
+    /// Identifiers can be variable names, class names, or functions.
+    /// Anything alphanumeric token that is not a reserved word. This
+    /// helper also returns a special token when it crosses an reserved
+    /// word of the type of that word.
     fn identifier(&mut self) -> Token {
         loop {
             if !(Self::is_alpha(self.peek()) || Self::is_digit(self.peek())) {
@@ -185,6 +195,7 @@ impl<'a, 'b> Scanner<'a> {
         self.make_token(self.identifier_type())
     }
 
+    /// Either gives the type of identifier, or the type of the reserved word last scanned.
     fn identifier_type(&self) -> TokenType {
         match self.peek_nth(self.start) {
             'a' => {
@@ -235,6 +246,10 @@ impl<'a, 'b> Scanner<'a> {
         }
     }
 
+    /// If the token pointed to the the parameter `start` matches the passed string, return that type.
+    ///
+    /// If the token isn't matched, then return `TokenIdentifier` because this is just
+    /// a variable class or method name.
     fn check_keyword(&self, start: usize, matches: &str, type_: TokenType) -> TokenType {
         let mut idx = 0;
         for ch in matches.chars() {
@@ -307,23 +322,40 @@ impl<'a, 'b> Scanner<'a> {
         }
     }
 
+    /// Skip ahead to the next character, and return the current one.
+    ///
+    /// The caller should want to take ownership of the current character
+    /// and shouldn't try to use any of the other helpers to access it. Once
+    /// this method is called, any call to `peek`, `previous`, or `peek_next`
+    /// are done in the context of the character _after_ the one that's
+    /// returned here.
     fn advance(&mut self) -> char {
         self.current += 1;
         self.previous()
     }
 
+    /// The character most recently scanned (probably by a call to `advance`).
     fn previous(&self) -> char {
         self.peek_nth(self.current - 1)
     }
 
+    /// The current character.
+    ///
+    /// If you call this after advance, it returns the character after the one returned by `advance`.
+    ///
+    /// If you call it somewhere in the middle of logic that iterates through some
+    /// context in the program text, it's best to think of this as the next un-processed
+    /// character in the text.
     fn peek(&self) -> char {
         self.source.chars().nth(self.current).unwrap_or('\0')
     }
 
+    /// Look ahead (used especially in processing comments).
     fn peek_next(&self) -> char {
         self.source.chars().nth(self.current + 1).unwrap_or('\0')
     }
 
+    /// Gives the character at index `i` from the _start_ of the program text.
     fn peek_nth(&self, i: usize) -> char {
         self.source.chars().nth(i).unwrap_or('\0')
     }
