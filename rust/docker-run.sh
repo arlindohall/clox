@@ -1,2 +1,2 @@
 #!/bin/bash
-docker run --rm -it loxvm:latest $@
+docker run --rm -it arlindohall/loxvm:latest $@

@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build . -t loxvm:latest
+docker build . -t arlindohall/loxvm:latest

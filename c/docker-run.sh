@@ -1,2 +1,2 @@
 #!/bin/bash
-docker run --rm -it clox:latest $@
+docker run --rm -it arlindohall/clox:latest $@

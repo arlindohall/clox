@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build . -t clox:latest
+docker build . -t arlindohall/clox:latest
