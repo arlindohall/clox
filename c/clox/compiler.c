@@ -150,6 +150,8 @@ static void declaration();
 /// figure out what order to put things in yet.
 static void namedVariable(Token, bool);
 
+static uint8_t argumentList();
+
 /// # Error handling
 ///
 /// This section contains functions for dealing with error tokens that were found
