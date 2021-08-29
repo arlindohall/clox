@@ -56,9 +56,9 @@ pub enum TokenType {
 #[derive(Clone, Debug)]
 pub struct Token {
     pub type_: TokenType,
-    start: usize,
-    length: usize,
-    line: usize,
+    pub start: usize,
+    pub length: usize,
+    pub line: usize,
 }
 
 /// The default token is used when initializing the parser.

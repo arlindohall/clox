@@ -6,4 +6,8 @@
 /// The main use, though, is pushing and poping values to the
 /// stack.
 #[derive(Debug)]
-pub enum Value {}
+pub enum Value {
+    // Number(f64),
+    // Boolean(bool),
+    // Object(usize),
+}

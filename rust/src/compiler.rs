@@ -4,10 +4,12 @@ use crate::scanner::Scanner;
 use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::scanner::TokenType::*;
+use crate::value::Value;
 use crate::vm::Op::*;
 use crate::vm::VM;
 
 static DEBUG_PRINT_CODE: bool = false;
+const UNINITIALIZED: isize = -1;
 
 /// Compiler used for a single function or script.
 ///
@@ -24,8 +26,16 @@ pub struct Compiler<'a> {
     parser: Parser,
 
     function: Function,
+    locals: Vec<Local>,
 
-    scope_depth: usize,
+    scope_depth: isize,
+}
+
+#[derive(Debug)]
+pub struct Local {
+    name: Token,
+    depth: isize,
+    is_captured: bool,
 }
 
 /// The parser that does all the work creating the bytecode.
@@ -51,6 +61,7 @@ struct Parser {
 #[derive(Debug)]
 pub struct Function {
     chunk: Vec<u8>,
+    constants: Vec<Value>,
 }
 
 impl<'a> Compiler<'a> {
@@ -69,7 +80,11 @@ impl<'a> Compiler<'a> {
                 panic_mode: false,
             },
             scope_depth: 0,
-            function: Function { chunk: Vec::new() },
+            locals: Vec::new(),
+            function: Function {
+                chunk: Vec::new(),
+                constants: Vec::new(),
+            },
         }
     }
 
@@ -236,8 +251,55 @@ impl<'a> Compiler<'a> {
         self.emit_byte(OpReturn as u8)
     }
 
-    fn parse_variable(&mut self, _message: &str) -> u8 {
-        todo!("parse one variable name and return the constant table address")
+    fn parse_variable(&mut self, message: &str) -> u8 {
+        self.consume(TokenIdentifier, message);
+
+        self.declare_variable();
+        if self.scope_depth > 0 {
+            return 0;
+        }
+
+        self.identifier_constant(&self.parser.previous)
+    }
+
+    fn declare_variable(&mut self) {
+        if self.scope_depth == 0 {
+            // Don't declare global variables. They are resolved dynamically
+            // at runtime
+            return;
+        }
+
+        let name = &self.parser.previous;
+
+        let mut error = false;
+        for local in &self.locals {
+            if local.depth != UNINITIALIZED && local.depth < self.scope_depth {
+                // There is a variable in the local stack that's not uninitialized but
+                // is a level above the current set of locals (in terms of block scoping)
+                break;
+            }
+
+            if self.identifiers_equal(name, &local.name) {
+                error = true;
+            }
+        }
+        self.add_local(&name);
+
+        if error {
+            self.error("Already a variable with this name in this scope.");
+        }
+    }
+
+    fn identifiers_equal(&self, _first: &Token, _second: &Token) -> bool {
+        todo!("compare two tokens")
+    }
+
+    fn add_local(&self, _name: &&Token) -> () {
+        todo!("add a local variable to the current scope")
+    }
+
+    fn identifier_constant(&self, _previous: &Token) -> u8 {
+        todo!("put a variable name in the constant table")
     }
 
     fn class_declaration(&self) {
@@ -254,6 +316,10 @@ impl<'a> Compiler<'a> {
 
     fn error_at_current(&mut self) {
         todo!("emit a compiler error and continue")
+    }
+
+    fn error(&mut self, _message: &str) {
+        todo!("emit a compiler error without locaiton")
     }
 
     fn synchronize(&mut self) {
