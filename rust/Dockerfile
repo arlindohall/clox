@@ -1,4 +1,4 @@
-FROM rust:latest
+FROM rust:latest AS rust-build
 
 COPY . /loxvm
 
@@ -6,9 +6,11 @@ RUN cd /loxvm && \
     cargo build --release && \
     mv target /
 
-RUN rm -rf /loxvm && mkdir /loxvm
+FROM ubuntu:latest as runtime
 
-WORKDIR /loxvm
+COPY --from=rust-build /target/release/main /loxvm/
 
-ENTRYPOINT [ "/target/release/main" ]
+WORKDIR /work
+
+ENTRYPOINT [ "/loxvm/main" ]
 CMD []
