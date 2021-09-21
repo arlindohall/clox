@@ -255,7 +255,7 @@ impl<'a, 'b> Scanner<'a> {
     fn check_keyword(&self, start: usize, matches: &str, type_: TokenType) -> TokenType {
         let mut idx = 0;
         for ch in matches.chars() {
-            if ch != self.peek_nth(start + idx) {
+            if ch != self.peek_nth(self.start + start + idx) {
                 return TokenIdentifier;
             }
             idx += 1;
@@ -296,8 +296,15 @@ impl<'a, 'b> Scanner<'a> {
         self.make_token(TokenString)
     }
 
-    fn match_(&mut self, _c: char) -> bool {
-        todo!("check if the next char is c")
+    fn match_(&mut self, c: char) -> bool {
+        if self.is_at_end() {
+            false
+        } else if self.peek_next() != c {
+            false
+        } else {
+            self.current += 1;
+            true
+        }
     }
 
     /// Move the pointer in the source string forward past whitespace.
@@ -448,5 +455,82 @@ mod test {
         assert_eq!(TokenIdentifier, scanner.scan_token().type_);
         assert_eq!(TokenSemicolon, scanner.scan_token().type_);
         assert_eq!(TokenEof, scanner.scan_token().type_);
+    }
+
+    #[test]
+    fn test_scan_for_statement() {
+        let mut scanner = scanner_of(
+            "
+        var x = 10;
+        for (var y = 0; y < 10; y = y + 1) {
+            print y;
+        }
+        ",
+        );
+
+        let token_types = vec![
+            TokenVar,
+            TokenIdentifier,
+            TokenEqual,
+            TokenNumber,
+            TokenSemicolon,
+            TokenFor,
+            TokenLeftParen,
+            TokenVar,
+            TokenIdentifier,
+            TokenEqual,
+            TokenNumber,
+            TokenSemicolon,
+            TokenIdentifier,
+            TokenLess,
+            TokenNumber,
+            TokenSemicolon,
+            TokenIdentifier,
+            TokenEqual,
+            TokenIdentifier,
+            TokenPlus,
+            TokenNumber,
+            TokenRightParen,
+            TokenLeftBrace,
+            TokenPrint,
+            TokenIdentifier,
+            TokenSemicolon,
+            TokenRightBrace,
+            TokenEof,
+        ];
+
+        for type_ in token_types {
+            assert_eq!(type_, scanner.scan_token().type_);
+        }
+    }
+
+    #[test]
+    fn test_scan_function_declaration() {
+        let mut scanner = scanner_of(
+            "
+        fun f(x) {
+            return 10 + x;
+        }
+        ",
+        );
+
+        let token_types = vec![
+            TokenFun,
+            TokenIdentifier,
+            TokenLeftParen,
+            TokenIdentifier,
+            TokenRightParen,
+            TokenLeftBrace,
+            TokenReturn,
+            TokenNumber,
+            TokenPlus,
+            TokenIdentifier,
+            TokenSemicolon,
+            TokenRightBrace,
+        ];
+
+        for type_ in token_types {
+            assert_eq!(type_, scanner.scan_token().type_);
+        }
     }
 }
