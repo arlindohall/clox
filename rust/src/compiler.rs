@@ -4,7 +4,7 @@ use crate::scanner::Scanner;
 use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::scanner::TokenType::*;
-use crate::value::Value;
+use crate::value::{Value, Value::*};
 use crate::vm::Op::*;
 use crate::vm::VM;
 
@@ -120,7 +120,9 @@ impl<'a> Compiler<'a> {
                 break;
             }
 
-            self.error_at_current();
+            let start = self.parser.current.start;
+            let end = self.parser.current.start + self.parser.current.length;
+            self.error_at_current(&self.scanner.source[start..end]);
         }
     }
 
@@ -230,8 +232,12 @@ impl<'a> Compiler<'a> {
         todo!("mark the current token/variable as initialized")
     }
 
-    fn consume(&self, _token_type: TokenType, _message: &str) {
-        todo!("advance one token and discard")
+    fn consume(&mut self, token_type: TokenType, message: &str) {
+        if self.parser.current.type_ == token_type {
+            self.advance();
+        } else {
+            self.error_at_current(message);
+        }
     }
 
     fn expression(&self) {
@@ -298,8 +304,8 @@ impl<'a> Compiler<'a> {
         todo!("add a local variable to the current scope")
     }
 
-    fn identifier_constant(&self, _previous: &Token) -> u8 {
-        todo!("put a variable name in the constant table")
+    fn identifier_constant(&self, name: &Token) -> u8 {
+        self.make_constant(Object(self.copy_string(name.start, name.length)))
     }
 
     fn class_declaration(&self) {
@@ -314,8 +320,8 @@ impl<'a> Compiler<'a> {
         todo!("compile a single non-definition statement")
     }
 
-    fn error_at_current(&mut self) {
-        todo!("emit a compiler error and continue")
+    fn error_at_current(&mut self, message: &str) {
+        todo!("emit a compiler error ({}) and continue", message)
     }
 
     fn error(&mut self, _message: &str) {
@@ -336,6 +342,14 @@ impl<'a> Compiler<'a> {
 
         function
     }
+
+    fn copy_string(&self, _start: usize, _length: usize) -> usize {
+        todo!("copy the string from the text, create an object in memory, return the object index")
+    }
+
+    fn make_constant(&self, _value: Value) -> u8 {
+        todo!("move value into constant table and return the index")
+    }
 }
 
 impl Function {
@@ -346,18 +360,18 @@ impl Function {
 
 #[cfg(test)]
 mod test {
-    // use super::*;
+    use super::*;
 
-    // #[test]
-    // fn test_compile_variable_declaration() {
-    //     let vm = VM::default();
-    //     let compiler = Compiler::new(&vm);
+    #[test]
+    fn test_compile_variable_declaration() {
+        let vm = VM::default();
+        let compiler = Compiler::new(&vm);
 
-    //     let bytecode = compiler.compile("var x;").unwrap();
+        let bytecode = compiler.compile("var x;").unwrap();
 
-    //     assert_eq!(
-    //         bytecode.chunk,
-    //         vec![OpNil as u8, OpDefineGlobal as u8, 1, OpReturn as u8]
-    //     )
-    // }
+        assert_eq!(
+            bytecode.chunk,
+            vec![OpNil as u8, OpDefineGlobal as u8, 1, OpReturn as u8]
+        )
+    }
 }
