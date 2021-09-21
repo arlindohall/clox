@@ -431,6 +431,16 @@ mod test {
     }
 
     #[test]
+    fn test_scan_a_print_statement() {
+        let mut scanner = scanner_of("print \"greetings\";");
+
+        assert_eq!(TokenPrint, scanner.scan_token().type_);
+        assert_eq!(TokenString, scanner.scan_token().type_);
+        assert_eq!(TokenSemicolon, scanner.scan_token().type_);
+        assert_eq!(TokenEof, scanner.scan_token().type_);
+    }
+
+    #[test]
     fn test_scan_variable_declaration() {
         let mut scanner = scanner_of("var x;");
 
