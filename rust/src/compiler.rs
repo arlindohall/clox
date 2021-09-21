@@ -346,18 +346,18 @@ impl Function {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    // use super::*;
 
-    #[test]
-    fn test_compile_variable_declaration() {
-        let vm = VM::default();
-        let compiler = Compiler::new(&vm);
+    // #[test]
+    // fn test_compile_variable_declaration() {
+    //     let vm = VM::default();
+    //     let compiler = Compiler::new(&vm);
 
-        let bytecode = compiler.compile("var x;").unwrap();
+    //     let bytecode = compiler.compile("var x;").unwrap();
 
-        assert_eq!(
-            bytecode.chunk,
-            vec![OpNil as u8, OpDefineGlobal as u8, 1, OpReturn as u8]
-        )
-    }
+    //     assert_eq!(
+    //         bytecode.chunk,
+    //         vec![OpNil as u8, OpDefineGlobal as u8, 1, OpReturn as u8]
+    //     )
+    // }
 }

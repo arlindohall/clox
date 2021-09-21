@@ -32,6 +32,7 @@ pub enum TokenType {
     TokenLessEqual,
     TokenMinus,
     TokenNil,
+    TokenNumber,
     TokenOr,
     TokenPlus,
     TokenPrint,
@@ -41,6 +42,7 @@ pub enum TokenType {
     TokenSemicolon,
     TokenSlash,
     TokenStar,
+    TokenString,
     TokenSuper,
     TokenThis,
     TokenTrue,
@@ -263,11 +265,35 @@ impl<'a, 'b> Scanner<'a> {
     }
 
     fn number(&mut self) -> Token {
-        todo!("scan a number constant")
+        while Self::is_digit(self.peek()) && !self.is_at_end() {
+            self.advance();
+        }
+
+        if '.' == self.peek() && Self::is_digit(self.peek_next()) {
+            self.advance();
+
+            while Self::is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+
+        self.make_token(TokenNumber)
     }
 
     fn string(&mut self) -> Token {
-        todo!("scan a string literal")
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return self.error_token("Unterminated string.");
+        }
+
+        self.advance();
+        self.make_token(TokenString)
     }
 
     fn match_(&mut self, _c: char) -> bool {
@@ -363,20 +389,50 @@ impl<'a, 'b> Scanner<'a> {
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
+
+    fn error_token(&self, message: &'static str) -> Token {
+        todo!(
+            "change token to take a raw char ptr and stuff a static error message here: {}",
+            message
+        )
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
 
-    #[test]
-    fn test_scan_variable_declaration() {
-        let mut scanner = Scanner {
-            source: "var x;",
+    #[cfg(test)]
+    fn scanner_of(text: &str) -> Scanner {
+        Scanner {
+            source: text,
             start: 0,
             current: 0,
             line: 1,
-        };
+        }
+    }
+
+    #[test]
+    fn test_scan_a_single_number_expression_statement() {
+        let mut scanner = scanner_of("1;");
+
+        assert_eq!(TokenNumber, scanner.scan_token().type_);
+        assert_eq!(TokenSemicolon, scanner.scan_token().type_);
+        assert_eq!(TokenEof, scanner.scan_token().type_);
+    }
+
+    #[test]
+    fn test_scan_a_single_string_expression_statement() {
+        let mut scanner = scanner_of("\"Hello, world!\";");
+
+        assert_eq!(TokenString, scanner.scan_token().type_);
+        assert_eq!(TokenSemicolon, scanner.scan_token().type_);
+        assert_eq!(TokenEof, scanner.scan_token().type_);
+    }
+
+    #[test]
+    fn test_scan_variable_declaration() {
+        let mut scanner = scanner_of("var x;");
 
         assert_eq!(TokenVar, scanner.scan_token().type_);
         assert_eq!(TokenIdentifier, scanner.scan_token().type_);

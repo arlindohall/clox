@@ -8,6 +8,6 @@
 #[derive(Debug)]
 pub enum Value {
     // Number(f64),
-    // Boolean(bool),
-    // Object(usize),
+// Boolean(bool),
+// Object(usize),
 }
