@@ -334,8 +334,13 @@ impl<'a> Compiler<'a> {
         self.vm.memory.allocate(string)
     }
 
-    fn make_constant(&self, _value: Value) -> u8 {
-        todo!("move value into constant table and return the index")
+    fn make_constant(&mut self, value: Value) -> u8 {
+        if self.function.constants.len() >= 256 {
+            todo!("error handling for over-full constant table")
+        } else {
+            self.function.constants.push(value);
+            self.function.constants.len() as u8
+        }
     }
 
     fn error_at_current(&mut self, message: &str) {
@@ -381,6 +386,9 @@ mod test {
         assert_eq!(
             bytecode.chunk,
             vec![OpNil as u8, OpDefineGlobal as u8, 1, OpReturn as u8]
-        )
+        );
+
+        assert_eq!(1, bytecode.constants.len());
+        // assert_eq!(Object(0), bytecode.constants.get(0).unwrap());
     }
 }
