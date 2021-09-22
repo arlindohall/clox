@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use crate::object::Object::*;
 use crate::scanner::Scanner;
 use crate::scanner::Token;
 use crate::scanner::TokenType;
@@ -20,9 +21,11 @@ const UNINITIALIZED: isize = -1;
 /// case, the source will be dropped on the next repl loop iteration.
 #[derive(Debug)]
 pub struct Compiler<'a> {
-    vm: &'a VM<'a>,
+    vm: &'a mut VM,
 
-    scanner: Scanner<'a>,
+    ancestors: Vec<Compiler<'a>>,
+
+    scanner: Scanner,
     parser: Parser,
 
     function: Function,
@@ -69,9 +72,10 @@ impl<'a> Compiler<'a> {
     ///
     /// This method also initializes the scanner and parser, and
     /// is fine to use any time we need a new [Compiler]
-    pub fn new(vm: &'a VM) -> Compiler<'a> {
+    pub fn new(vm: &mut VM) -> Compiler {
         Compiler {
             vm,
+            ancestors: Vec::new(),
             scanner: Scanner::default(),
             parser: Parser {
                 had_error: false,
@@ -92,8 +96,8 @@ impl<'a> Compiler<'a> {
     ///
     /// The statement passed in can be a group of statements separated
     /// by a ';' character, as specified in Lox grammar.
-    pub fn compile(mut self, statement: &'a str) -> Result<Function, Box<dyn Error>> {
-        self.scanner.source = statement;
+    pub fn compile(mut self, statement: &str) -> Result<Function, Box<dyn Error>> {
+        self.scanner.take_str(statement);
         self.parser.had_error = false;
 
         self.advance();
@@ -102,7 +106,9 @@ impl<'a> Compiler<'a> {
             self.declaration();
         }
 
-        Ok(self.end_compiler())
+        let function = self.end_compiler();
+
+        Ok(function)
     }
 
     /// Move the parser forward by one token.
@@ -122,7 +128,7 @@ impl<'a> Compiler<'a> {
 
             let start = self.parser.current.start;
             let end = self.parser.current.start + self.parser.current.length;
-            self.error_at_current(&self.scanner.source[start..end]);
+            self.error_at_current(&self.scanner.copy_segment(start, end));
         }
     }
 
@@ -265,7 +271,7 @@ impl<'a> Compiler<'a> {
             return 0;
         }
 
-        self.identifier_constant(&self.parser.previous)
+        self.identifier_constant()
     }
 
     fn declare_variable(&mut self) {
@@ -304,8 +310,11 @@ impl<'a> Compiler<'a> {
         todo!("add a local variable to the current scope")
     }
 
-    fn identifier_constant(&self, name: &Token) -> u8 {
-        self.make_constant(Object(self.copy_string(name.start, name.length)))
+    fn identifier_constant(&mut self) -> u8 {
+        let start = self.parser.previous.start;
+        let end = self.parser.previous.length + self.parser.previous.start;
+        let obj_pointer = self.copy_string(start, end);
+        self.make_constant(Object(obj_pointer))
     }
 
     fn class_declaration(&self) {
@@ -318,6 +327,15 @@ impl<'a> Compiler<'a> {
 
     fn statement(&self) {
         todo!("compile a single non-definition statement")
+    }
+
+    fn copy_string(&mut self, start: usize, end: usize) -> usize {
+        let string = ObjString(self.scanner.copy_segment(start, end));
+        self.vm.memory.allocate(string)
+    }
+
+    fn make_constant(&self, _value: Value) -> u8 {
+        todo!("move value into constant table and return the index")
     }
 
     fn error_at_current(&mut self, message: &str) {
@@ -334,21 +352,12 @@ impl<'a> Compiler<'a> {
 
     fn end_compiler(mut self) -> Function {
         self.emit_return();
-        let function = self.function;
 
         if DEBUG_PRINT_CODE {
-            function.disassemble_chunk();
+            self.function.disassemble_chunk();
         }
 
-        function
-    }
-
-    fn copy_string(&self, _start: usize, _length: usize) -> usize {
-        todo!("copy the string from the text, create an object in memory, return the object index")
-    }
-
-    fn make_constant(&self, _value: Value) -> u8 {
-        todo!("move value into constant table and return the index")
+        self.function
     }
 }
 
@@ -364,8 +373,8 @@ mod test {
 
     #[test]
     fn test_compile_variable_declaration() {
-        let vm = VM::default();
-        let compiler = Compiler::new(&vm);
+        let mut vm = VM::default();
+        let compiler = Compiler::new(&mut vm);
 
         let bytecode = compiler.compile("var x;").unwrap();
 

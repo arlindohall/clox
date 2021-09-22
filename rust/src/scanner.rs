@@ -81,8 +81,8 @@ impl Default for Token {
 /// parser/compiler and turned into bytecode, that way we
 /// don't have to produce bytecode directly from the text.
 #[derive(Debug)]
-pub struct Scanner<'a> {
-    pub source: &'a str,
+pub struct Scanner {
+    pub source: Vec<char>,
 
     start: usize,
     current: usize,
@@ -90,10 +90,10 @@ pub struct Scanner<'a> {
     line: usize,
 }
 
-impl<'a> Default for Scanner<'a> {
+impl Default for Scanner {
     fn default() -> Self {
         Scanner {
-            source: "",
+            source: Self::strip_str(""),
             start: 0,
             current: 0,
             line: 1,
@@ -101,7 +101,19 @@ impl<'a> Default for Scanner<'a> {
     }
 }
 
-impl<'a, 'b> Scanner<'a> {
+impl Scanner {
+    pub fn take_str(&mut self, text: &str) {
+        self.source = Self::strip_str(text);
+    }
+
+    fn strip_str(text: &str) -> Vec<char> {
+        text.chars().collect()
+    }
+
+    pub fn copy_segment(&self, start: usize, end: usize) -> String {
+        self.source[start..end].iter().collect()
+    }
+
     /// Scan a single token from the source and return.
     ///
     /// This is where we ignore whitespace and scan identifiers,
@@ -380,17 +392,20 @@ impl<'a, 'b> Scanner<'a> {
     /// context in the program text, it's best to think of this as the next un-processed
     /// character in the text.
     fn peek(&self) -> char {
-        self.source.chars().nth(self.current).unwrap_or('\0')
+        self.peek_nth(self.current)
     }
 
     /// Look ahead (used especially in processing comments).
     fn peek_next(&self) -> char {
-        self.source.chars().nth(self.current + 1).unwrap_or('\0')
+        self.peek_nth(self.current + 1)
     }
 
     /// Gives the character at index `i` from the _start_ of the program text.
+    ///
+    /// We rely on the Optional return of `&[T]::get` so we don't worry if we've actually
+    /// requested a value beyond the source.
     fn peek_nth(&self, i: usize) -> char {
-        self.source.chars().nth(i).unwrap_or('\0')
+        *self.source.get(i).unwrap_or(&'\0')
     }
 
     fn is_at_end(&self) -> bool {
@@ -412,7 +427,7 @@ mod test {
     #[cfg(test)]
     fn scanner_of(text: &str) -> Scanner {
         Scanner {
-            source: text,
+            source: Scanner::strip_str(text),
             start: 0,
             current: 0,
             line: 1,
@@ -506,13 +521,12 @@ mod test {
 
     #[test]
     fn test_scan_function_declaration() {
-        let mut scanner = scanner_of(
-            "
+        let text = "
         fun f(x) {
             return 10 + x;
         }
-        ",
-        );
+        ";
+        let mut scanner = scanner_of(text);
 
         let token_types = vec![
             TokenFun,

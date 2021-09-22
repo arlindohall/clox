@@ -13,7 +13,7 @@ use loxvm::vm::VM;
 /// langauge, and makes the rest of the VM, compiler, and related
 /// constructs easier to test.
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut lox = Lox { vm: VM::default() };
+    let lox = Lox { vm: VM::default() };
 
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() == 1 {
@@ -29,8 +29,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// The top-level language, including the IO logic for
 /// the [REPL](#method.repl) and script interpreter.
 /// It has functions for running the REPL aand files.
-struct Lox<'a> {
-    vm: VM<'a>,
+struct Lox {
+    vm: VM,
 }
 
 /// A private helper that produces the prompt in the REPL
@@ -39,7 +39,7 @@ fn prompt() -> Result<(), std::io::Error> {
     std::io::stdout().flush()
 }
 
-impl<'a> Lox<'a> {
+impl Lox {
     /// Just read a line at a time from stdin. If an error
     /// happens either while reading a line or while executing
     /// it, then we'll just fail and exit immediately. Otherwise
@@ -47,13 +47,13 @@ impl<'a> Lox<'a> {
     ///
     /// We rely on the [VM](../loxvm/vm/struct.VM.html) struct to
     /// track any state.
-    fn repl(&mut self) -> Result<(), Box<dyn Error>> {
+    fn repl(mut self) -> Result<(), Box<dyn Error>> {
         let stdin = std::io::stdin();
         let lock = stdin.lock();
 
         prompt()?;
         for line in lock.lines() {
-            self.vm.interpret(line?.as_str());
+            self.vm = self.vm.interpret(line?.as_str());
             prompt()?;
         }
 
@@ -64,7 +64,7 @@ impl<'a> Lox<'a> {
     /// the interpreter will end up stripping all whitespace,
     /// which means newlines are ignored and you can use
     /// multiline statements in scripts.
-    fn run_file(&mut self, file_name: &str) -> Result<(), Box<dyn Error>> {
+    fn run_file(self, file_name: &str) -> Result<(), Box<dyn Error>> {
         let mut contents = String::new();
         let mut file = File::open(file_name)?;
 
