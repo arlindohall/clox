@@ -325,8 +325,66 @@ impl<'a> Compiler<'a> {
         todo!("compile a single function definition")
     }
 
-    fn statement(&self) {
-        todo!("compile a single non-definition statement")
+    fn statement(&mut self) {
+        if self.match_(TokenPrint) {
+            self.print_statement();
+        } else if self.match_(TokenAssert) {
+            self.assert_statement();
+        } else if self.match_(TokenFor) {
+            self.for_statement();
+        } else if self.match_(TokenIf) {
+            self.if_statement();
+        } else if self.match_(TokenReturn) {
+            self.return_statement();
+        } else if self.match_(TokenWhile) {
+            self.while_statement();
+        } else if self.match_(TokenLeftBrace) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
+        } else {
+            self.epxression_statement();
+        }
+    }
+
+    fn print_statement(&self) {
+        todo!("compile a single print statement")
+    }
+
+    fn assert_statement(&self) {
+        todo!("compile a single assertion")
+    }
+
+    fn for_statement(&self) {
+        todo!("compile a for loop")
+    }
+
+    fn if_statement(&self) {
+        todo!("compile an if statement")
+    }
+
+    fn return_statement(&self) {
+        todo!("compile a return statement")
+    }
+
+    fn while_statement(&self) {
+        todo!("compile a while statement")
+    }
+
+    fn epxression_statement(&self) {
+        todo!("compile an expression statement")
+    }
+
+    fn block(&self) {
+        todo!("compile a block")
+    }
+
+    fn begin_scope(&self) {
+        todo!("begin a new scope")
+    }
+
+    fn end_scope(&self) {
+        todo!("end a scope")
     }
 
     fn copy_string(&mut self, start: usize, end: usize) -> usize {
@@ -389,6 +447,15 @@ mod test {
         );
 
         assert_eq!(1, bytecode.constants.len());
-        // assert_eq!(Object(0), bytecode.constants.get(0).unwrap());
+
+        if let Object(ptr) = bytecode.constants.get(0).unwrap() {
+            if let ObjString(s) = vm.memory.retrieve(*ptr) {
+                assert_eq!(s, "x");
+            } else {
+                panic!("expected memory to contian string variable name")
+            }
+        } else {
+            panic!("expected the constant table to point to memory")
+        }
     }
 }

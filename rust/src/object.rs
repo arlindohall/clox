@@ -26,4 +26,8 @@ impl Memory {
 
         index
     }
+
+    pub fn retrieve(&mut self, index: usize) -> &Object {
+        self.memory.get(index).unwrap()
+    }
 }
