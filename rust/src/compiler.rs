@@ -376,8 +376,10 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn print_statement(&self) {
-        todo!("compile a single print statement")
+    fn print_statement(&mut self) {
+        self.expression();
+        self.consume(TokenSemicolon, "Expect ';' after expression.");
+        self.emit_bytes(OpPrint as u8, OpPop as u8);
     }
 
     fn assert_statement(&self) {
@@ -521,8 +523,8 @@ impl<'a> Compiler<'a> {
         todo!("emit a compiler error ({}) and continue", message)
     }
 
-    fn error(&mut self, _message: &str) {
-        todo!("emit a compiler error without locaiton")
+    fn error(&mut self, message: &str) {
+        todo!("emit a compiler error ({}) without location", message)
     }
 
     fn synchronize(&mut self) {
@@ -543,8 +545,8 @@ impl<'a> Compiler<'a> {
 /// Section: parse functions
 fn number(this: &mut Compiler, _can_assign: bool) {
     let start = this.parser.previous.start;
-    let length = this.parser.previous.length;
-    let value = convert(this.scanner.copy_segment(start, length));
+    let end = start + this.parser.previous.length;
+    let value = convert(this.scanner.copy_segment(start, end));
 
     let index = this.make_constant(Value::Number(value));
     this.emit_bytes(OpConstant as u8, index);
@@ -605,7 +607,22 @@ mod test {
             vec![OpConstant as u8, 1, OpPop as u8, OpReturn as u8]
         );
     }
+
+    #[test]
+    fn test_compile_print_expression() {
+        let (bytecode, _vm) = compile_expression("print 1;");
+
+        assert_eq!(5, bytecode.chunk.len());
+
+        print!("{:?}", bytecode);
+        assert_eq!(OpConstant as u8,    bytecode.chunk[0]);
+        assert_eq!(1,                   bytecode.chunk[1]);
+        assert_eq!(OpPrint as u8,       bytecode.chunk[2]);
+        assert_eq!(OpPop as u8,         bytecode.chunk[3]);
+        assert_eq!(OpReturn as u8,      bytecode.chunk[4]);
+    }
 }
+
 impl Precedence {
     fn as_u8(&self) -> u8 {
         match self {

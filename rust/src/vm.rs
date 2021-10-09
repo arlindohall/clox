@@ -32,6 +32,7 @@ pub enum Op {
     OpDefineGlobal,
     OpConstant,
     OpPop,
+    OpPrint,
     OpNil,
     OpReturn,
 }

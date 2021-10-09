@@ -27,11 +27,10 @@ impl Memory {
     }
 
     pub fn allocate(&mut self, object: Object) -> usize {
-        let index = self.memory.len();
         self.memory.insert(self.count, object);
         self.count += 1;
 
-        index
+        self.count - 1
     }
 
     pub fn retrieve(&mut self, index: usize) -> &Object {
