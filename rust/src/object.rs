@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug)]
 pub enum Object {
     _ObjBoundMethod(),
@@ -12,22 +14,27 @@ pub enum Object {
 
 #[derive(Debug)]
 pub struct Memory {
-    memory: Vec<Object>,
+    count: usize,
+    memory: HashMap<usize, Object>,
 }
 
 impl Memory {
     pub fn new() -> Memory {
-        Memory { memory: Vec::new() }
+        Memory {
+            count: 0,
+            memory: HashMap::new(),
+        }
     }
 
     pub fn allocate(&mut self, object: Object) -> usize {
         let index = self.memory.len();
-        self.memory.push(object);
+        self.memory.insert(self.count, object);
+        self.count += 1;
 
         index
     }
 
     pub fn retrieve(&mut self, index: usize) -> &Object {
-        self.memory.get(index).unwrap()
+        self.memory.get(&index).unwrap()
     }
 }
