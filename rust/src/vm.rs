@@ -30,6 +30,8 @@ pub struct VM {
 #[repr(u8)]
 pub enum Op {
     OpDefineGlobal,
+    OpConstant,
+    OpPop,
     OpNil,
     OpReturn,
 }

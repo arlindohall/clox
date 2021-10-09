@@ -67,6 +67,34 @@ pub struct Function {
     constants: Vec<Value>,
 }
 
+#[derive(Debug)]
+enum Precedence {
+    PrecNone,
+    PrecAssignment,
+    _PrecOr,
+    _PrecAnd,
+    _PrecEquality,
+    _PrecComparison,
+    _PrecTerm,
+    _PrecFactor,
+    _PrecUnary,
+    _PrecCall,
+    _PrecPrimary,
+}
+
+struct ParseRule {
+    prefix_rule: Option<ParseFn>,
+    infix_rule: Option<ParseFn>,
+    precedence: Precedence,
+}
+
+type ParseFn = fn(&mut Compiler, bool);
+
+use Precedence::*;
+use bigdecimal::BigDecimal;
+use bigdecimal::Num;
+use bigdecimal::ToPrimitive;
+
 impl<'a> Compiler<'a> {
     /// Create a new compiler with empty source and no errors.
     ///
@@ -246,8 +274,9 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn expression(&self) {
-        todo!("compile one expression to bytecode (putting on stack)")
+    fn expression(&mut self) {
+        // Called parsePrecedence in the book
+        self.expression_with_precedence(PrecAssignment);
     }
 
     fn emit_bytes(&mut self, op1: u8, op2: u8) {
@@ -371,8 +400,10 @@ impl<'a> Compiler<'a> {
         todo!("compile a while statement")
     }
 
-    fn epxression_statement(&self) {
-        todo!("compile an expression statement")
+    fn epxression_statement(&mut self) {
+        self.expression();
+        self.consume(TokenSemicolon, "Expect ';' after expression.");
+        self.emit_byte(OpPop as u8);
     }
 
     fn block(&self) {
@@ -385,6 +416,91 @@ impl<'a> Compiler<'a> {
 
     fn end_scope(&self) {
         todo!("end a scope")
+    }
+
+    fn expression_with_precedence(&mut self, precedence: Precedence) {
+        self.advance();
+
+        let prefix_rule: Option<ParseFn> = self.previous_rule().prefix_rule;
+        let can_assign = precedence.as_u8() <= PrecAssignment.as_u8();
+
+        match prefix_rule {
+            Some(rule) => rule(self, can_assign),
+            None => self.error("Expect expression."),
+        }
+
+        while precedence.as_u8() <= self.current_rule().precedence.as_u8() {
+            self.advance();
+            if let Some(infix_rule) = self.previous_rule().infix_rule {
+                infix_rule(self, can_assign);
+            }
+        }
+
+        if (can_assign) && self.match_(TokenEqual) {
+            self.error("Invalid assignment target.");
+        }
+    }
+
+    fn previous_rule(&self) -> ParseRule {
+        self.get_rule(&self.parser.previous.type_)
+    }
+
+    fn current_rule(&self) -> ParseRule {
+        self.get_rule(&self.parser.current.type_)
+    }
+
+    fn get_rule(&self, type_: &TokenType) -> ParseRule {
+        match type_ {
+            TokenAnd => todo!(),
+            TokenAssert => todo!(),
+            TokenBang => todo!(),
+            TokenBangEqual => todo!(),
+            TokenClass => todo!(),
+            TokenComma => todo!(),
+            TokenDot => todo!(),
+            TokenElse => todo!(),
+            TokenEof => todo!(),
+            TokenEqual => todo!(),
+            TokenEqualEqual => todo!(),
+            TokenError => todo!(),
+            TokenFalse => todo!(),
+            TokenFor => todo!(),
+            TokenFun => todo!(),
+            TokenGreater => todo!(),
+            TokenGreaterEqual => todo!(),
+            TokenIdentifier => todo!(),
+            TokenIf => todo!(),
+            TokenLeftBrace => todo!(),
+            TokenLeftParen => todo!(),
+            TokenLess => todo!(),
+            TokenLessEqual => todo!(),
+            TokenMinus => todo!(),
+            TokenNil => todo!(),
+            TokenNumber => ParseRule {
+                prefix_rule: Some(number),
+                infix_rule: None,
+                precedence: PrecAssignment,
+            },
+            TokenOr => todo!(),
+            TokenPlus => todo!(),
+            TokenPrint => todo!(),
+            TokenReturn => todo!(),
+            TokenRightBrace => todo!(),
+            TokenRightParen => todo!(),
+            TokenSemicolon => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            TokenSlash => todo!(),
+            TokenStar => todo!(),
+            TokenString => todo!(),
+            TokenSuper => todo!(),
+            TokenThis => todo!(),
+            TokenTrue => todo!(),
+            TokenVar => todo!(),
+            TokenWhile => todo!(),
+        }
     }
 
     fn copy_string(&mut self, start: usize, end: usize) -> usize {
@@ -424,6 +540,23 @@ impl<'a> Compiler<'a> {
     }
 }
 
+/// Section: parse functions
+fn number(this: &mut Compiler, _can_assign: bool) {
+    let start = this.parser.previous.start;
+    let length = this.parser.previous.length;
+    let value = convert(this.scanner.copy_segment(start, length));
+
+    let index = this.make_constant(Value::Number(value));
+    this.emit_bytes(OpConstant as u8, index);
+}
+
+fn convert(number: String) -> f64 {
+    BigDecimal::from_str_radix(&number, 10)
+        .unwrap()
+        .to_f64()
+        .unwrap()
+}
+
 impl Function {
     fn disassemble_chunk(&self) {
         todo!("debug print this function")
@@ -434,12 +567,16 @@ impl Function {
 mod test {
     use super::*;
 
-    #[test]
-    fn test_compile_variable_declaration() {
+    fn compile_expression(expr: &str) -> (Function, VM) {
         let mut vm = VM::default();
         let compiler = Compiler::new(&mut vm);
 
-        let bytecode = compiler.compile("var x;").unwrap();
+        (compiler.compile(expr).unwrap(), vm)
+    }
+
+    #[test]
+    fn test_compile_variable_declaration() {
+        let (bytecode, mut vm) = compile_expression("var x;");
 
         assert_eq!(
             bytecode.chunk,
@@ -456,6 +593,33 @@ mod test {
             }
         } else {
             panic!("expected the constant table to point to memory")
+        }
+    }
+
+    #[test]
+    fn test_compile_simple_integer_expression() {
+        let (bytecode, _vm) = compile_expression("1;");
+
+        assert_eq!(
+            bytecode.chunk,
+            vec![OpConstant as u8, 1, OpPop as u8, OpReturn as u8]
+        );
+    }
+}
+impl Precedence {
+    fn as_u8(&self) -> u8 {
+        match self {
+            PrecNone => 0,
+            PrecAssignment => 1,
+            _PrecOr => 2,
+            _PrecAnd => 3,
+            _PrecEquality => 4,
+            _PrecComparison => 5,
+            _PrecTerm => 6,
+            _PrecFactor => 7,
+            _PrecUnary => 8,
+            _PrecCall => 9,
+            _PrecPrimary => 10,
         }
     }
 }

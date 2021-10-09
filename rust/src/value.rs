@@ -7,7 +7,7 @@
 /// stack.
 #[derive(Debug)]
 pub enum Value {
-    _Number(f64),
+    Number(f64),
     _Boolean(bool),
     Object(usize),
 }
