@@ -496,7 +496,11 @@ impl<'a> Compiler<'a> {
             },
             TokenSlash => todo!(),
             TokenStar => todo!(),
-            TokenString => todo!(),
+            TokenString => ParseRule {
+                prefix_rule: Some(string),
+                infix_rule: None,
+                precedence: PrecAssignment,
+            },
             TokenSuper => todo!(),
             TokenThis => todo!(),
             TokenTrue => todo!(),
@@ -515,7 +519,7 @@ impl<'a> Compiler<'a> {
             todo!("error handling for over-full constant table")
         } else {
             self.function.constants.push(value);
-            self.function.constants.len() as u8
+            (self.function.constants.len() - 1) as u8
         }
     }
 
@@ -542,21 +546,55 @@ impl<'a> Compiler<'a> {
     }
 }
 
+impl Precedence {
+    fn as_u8(&self) -> u8 {
+        match self {
+            PrecNone => 0,
+            PrecAssignment => 1,
+            _PrecOr => 2,
+            _PrecAnd => 3,
+            _PrecEquality => 4,
+            _PrecComparison => 5,
+            _PrecTerm => 6,
+            _PrecFactor => 7,
+            _PrecUnary => 8,
+            _PrecCall => 9,
+            _PrecPrimary => 10,
+        }
+    }
+}
+
 /// Section: parse functions
 fn number(this: &mut Compiler, _can_assign: bool) {
     let start = this.parser.previous.start;
     let end = start + this.parser.previous.length;
-    let value = convert(this.scanner.copy_segment(start, end));
+    let value = this.scanner.copy_segment(start, end).convert();
 
     let index = this.make_constant(Value::Number(value));
     this.emit_bytes(OpConstant as u8, index);
 }
 
-fn convert(number: String) -> f64 {
-    BigDecimal::from_str_radix(&number, 10)
-        .unwrap()
-        .to_f64()
-        .unwrap()
+fn string(this: &mut Compiler, _can_assign: bool) {
+    let start = this.parser.previous.start;
+    let end = start + this.parser.previous.length;
+    let value = this.scanner.copy_segment(start, end);
+    let value = this.vm.memory.allocate(ObjString(value));
+
+    let index = this.make_constant(Value::Object(value));
+    this.emit_bytes(OpConstant as u8, index);
+}
+
+trait ConvertNumber {
+    fn convert(&self) -> f64;
+}
+
+impl ConvertNumber for String {
+    fn convert(&self) -> f64 {
+        BigDecimal::from_str_radix(self, 10)
+            .unwrap()
+            .to_f64()
+            .unwrap()
+    }
 }
 
 impl Function {
@@ -582,7 +620,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk,
-            vec![OpNil as u8, OpDefineGlobal as u8, 1, OpReturn as u8]
+            vec![OpNil as u8, OpDefineGlobal as u8, 0, OpReturn as u8]
         );
 
         assert_eq!(1, bytecode.constants.len());
@@ -604,7 +642,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk,
-            vec![OpConstant as u8, 1, OpPop as u8, OpReturn as u8]
+            vec![OpConstant as u8, 0, OpPop as u8, OpReturn as u8]
         );
     }
 
@@ -612,31 +650,19 @@ mod test {
     fn test_compile_print_expression() {
         let (bytecode, _vm) = compile_expression("print 1;");
 
-        assert_eq!(5, bytecode.chunk.len());
-
-        print!("{:?}", bytecode);
-        assert_eq!(OpConstant as u8,    bytecode.chunk[0]);
-        assert_eq!(1,                   bytecode.chunk[1]);
-        assert_eq!(OpPrint as u8,       bytecode.chunk[2]);
-        assert_eq!(OpPop as u8,         bytecode.chunk[3]);
-        assert_eq!(OpReturn as u8,      bytecode.chunk[4]);
+        assert_eq!(
+            bytecode.chunk,
+            vec![OpConstant as u8, 0, OpPrint as u8, OpPop as u8, OpReturn as u8]
+        );
     }
-}
 
-impl Precedence {
-    fn as_u8(&self) -> u8 {
-        match self {
-            PrecNone => 0,
-            PrecAssignment => 1,
-            _PrecOr => 2,
-            _PrecAnd => 3,
-            _PrecEquality => 4,
-            _PrecComparison => 5,
-            _PrecTerm => 6,
-            _PrecFactor => 7,
-            _PrecUnary => 8,
-            _PrecCall => 9,
-            _PrecPrimary => 10,
-        }
+    #[test]
+    fn test_compile_print_string() {
+        let (bytecode, _vm) = compile_expression("print \"hello\";");
+
+        assert_eq!(
+            bytecode.chunk,
+            vec![OpConstant as u8, 0, OpPrint as u8, OpPop as u8, OpReturn as u8]
+        );
     }
 }
