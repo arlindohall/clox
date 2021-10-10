@@ -1,4 +1,3 @@
-use std::error::Error;
 
 use crate::object::Object::*;
 use crate::scanner::Scanner;
@@ -6,6 +5,7 @@ use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::scanner::TokenType::*;
 use crate::value::{Value, Value::*};
+use crate::vm::LoxError;
 use crate::vm::Op::*;
 use crate::vm::VM;
 
@@ -124,7 +124,7 @@ impl<'a> Compiler<'a> {
     ///
     /// The statement passed in can be a group of statements separated
     /// by a ';' character, as specified in Lox grammar.
-    pub fn compile(mut self, statement: &str) -> Result<Function, Box<dyn Error>> {
+    pub fn compile(mut self, statement: &str) -> Result<Function, LoxError> {
         self.scanner.take_str(statement);
         self.parser.had_error = false;
 
@@ -614,6 +614,13 @@ mod test {
         (compiler.compile(expr).unwrap(), vm)
     }
 
+    fn compile_broken(expr: &str) -> (LoxError, VM) {
+        let mut vm = VM::default();
+        let compiler = Compiler::new(&mut vm);
+
+        (compiler.compile(expr).unwrap_err(), vm)
+    }
+
     #[test]
     fn test_compile_variable_declaration() {
         let (bytecode, mut vm) = compile_expression("var x;");
@@ -664,5 +671,12 @@ mod test {
             bytecode.chunk,
             vec![OpConstant as u8, 0, OpPrint as u8, OpPop as u8, OpReturn as u8]
         );
+    }
+
+    #[test]
+    fn test_compile_error_unexpected_end_of_expr() {
+        let (err, _vm) = compile_broken(";");
+
+        print!("{}", err);
     }
 }

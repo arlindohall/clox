@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt::Display;
+
 use crate::compiler::Compiler;
 use crate::object::Memory;
 use crate::value::Value;
@@ -25,6 +28,12 @@ pub struct VM {
     stack: Vec<Value>,
 
     pub memory: Memory,
+}
+
+#[derive(Debug)]
+pub struct LoxError {
+    line: usize,
+    message: String,
 }
 
 #[repr(u8)]
@@ -73,3 +82,11 @@ impl VM {
         self
     }
 }
+
+impl Display for LoxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for LoxError {}
