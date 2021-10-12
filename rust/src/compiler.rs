@@ -1,4 +1,3 @@
-
 use crate::object::Object::*;
 use crate::scanner::Scanner;
 use crate::scanner::Token;
@@ -6,6 +5,8 @@ use crate::scanner::TokenType;
 use crate::scanner::TokenType::*;
 use crate::value::{Value, Value::*};
 use crate::vm::LoxError;
+use crate::vm::LoxErrorChain;
+use crate::vm::LoxErrorType::*;
 use crate::vm::Op::*;
 use crate::vm::VM;
 
@@ -32,6 +33,8 @@ pub struct Compiler<'a> {
     locals: Vec<Local>,
 
     scope_depth: isize,
+
+    error_chain: LoxErrorChain,
 }
 
 #[derive(Debug)]
@@ -44,8 +47,6 @@ pub struct Local {
 /// The parser that does all the work creating the bytecode.
 #[derive(Debug)]
 struct Parser {
-    had_error: bool,
-
     current: Token,
     previous: Token,
 
@@ -90,10 +91,10 @@ struct ParseRule {
 
 type ParseFn = fn(&mut Compiler, bool);
 
-use Precedence::*;
 use bigdecimal::BigDecimal;
 use bigdecimal::Num;
 use bigdecimal::ToPrimitive;
+use Precedence::*;
 
 impl<'a> Compiler<'a> {
     /// Create a new compiler with empty source and no errors.
@@ -106,7 +107,6 @@ impl<'a> Compiler<'a> {
             ancestors: Vec::new(),
             scanner: Scanner::default(),
             parser: Parser {
-                had_error: false,
                 current: Token::default(),
                 previous: Token::default(),
                 panic_mode: false,
@@ -117,6 +117,7 @@ impl<'a> Compiler<'a> {
                 chunk: Vec::new(),
                 constants: Vec::new(),
             },
+            error_chain: LoxErrorChain::new(),
         }
     }
 
@@ -124,9 +125,8 @@ impl<'a> Compiler<'a> {
     ///
     /// The statement passed in can be a group of statements separated
     /// by a ';' character, as specified in Lox grammar.
-    pub fn compile(mut self, statement: &str) -> Result<Function, LoxError> {
+    pub fn compile(mut self, statement: &str) -> Result<Function, LoxErrorChain> {
         self.scanner.take_str(statement);
-        self.parser.had_error = false;
 
         self.advance();
 
@@ -134,9 +134,7 @@ impl<'a> Compiler<'a> {
             self.declaration();
         }
 
-        let function = self.end_compiler();
-
-        Ok(function)
+        self.end_compiler()
     }
 
     /// Move the parser forward by one token.
@@ -461,7 +459,11 @@ impl<'a> Compiler<'a> {
             TokenComma => todo!(),
             TokenDot => todo!(),
             TokenElse => todo!(),
-            TokenEof => todo!(),
+            TokenEof => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
             TokenEqual => todo!(),
             TokenEqualEqual => todo!(),
             TokenError => todo!(),
@@ -524,25 +526,37 @@ impl<'a> Compiler<'a> {
     }
 
     fn error_at_current(&mut self, message: &str) {
-        todo!("emit a compiler error ({}) and continue", message)
+        let message = message.to_string();
+        self.error_chain.register(ParseError(LoxError {
+            line: self.parser.current.line,
+            message,
+        }))
     }
 
     fn error(&mut self, message: &str) {
-        todo!("emit a compiler error ({}) without location", message)
+        let message = message.to_string();
+        self.error_chain.register(ParseError(LoxError {
+            line: self.parser.previous.line,
+            message,
+        }))
     }
 
     fn synchronize(&mut self) {
         todo!("recover after an error")
     }
 
-    fn end_compiler(mut self) -> Function {
+    fn end_compiler(mut self) -> Result<Function, LoxErrorChain> {
         self.emit_return();
 
         if DEBUG_PRINT_CODE {
             self.function.disassemble_chunk();
         }
 
-        self.function
+        if self.error_chain.had_error() {
+            Err(self.error_chain)
+        } else {
+            Ok(self.function)
+        }
     }
 }
 
@@ -614,7 +628,7 @@ mod test {
         (compiler.compile(expr).unwrap(), vm)
     }
 
-    fn compile_broken(expr: &str) -> (LoxError, VM) {
+    fn compile_broken(expr: &str) -> (LoxErrorChain, VM) {
         let mut vm = VM::default();
         let compiler = Compiler::new(&mut vm);
 
@@ -659,7 +673,13 @@ mod test {
 
         assert_eq!(
             bytecode.chunk,
-            vec![OpConstant as u8, 0, OpPrint as u8, OpPop as u8, OpReturn as u8]
+            vec![
+                OpConstant as u8,
+                0,
+                OpPrint as u8,
+                OpPop as u8,
+                OpReturn as u8
+            ]
         );
     }
 
@@ -669,7 +689,13 @@ mod test {
 
         assert_eq!(
             bytecode.chunk,
-            vec![OpConstant as u8, 0, OpPrint as u8, OpPop as u8, OpReturn as u8]
+            vec![
+                OpConstant as u8,
+                0,
+                OpPrint as u8,
+                OpPop as u8,
+                OpReturn as u8
+            ]
         );
     }
 

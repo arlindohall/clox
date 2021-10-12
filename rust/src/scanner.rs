@@ -1,5 +1,9 @@
 use TokenType::*;
 
+use crate::vm::LoxError;
+use crate::vm::LoxErrorChain;
+use crate::vm::LoxErrorType::*;
+
 /// The type of token that was scanned.
 ///
 /// This is not a structure enum because every token has the same properties
@@ -88,6 +92,8 @@ pub struct Scanner {
     current: usize,
 
     line: usize,
+
+    error_chain: LoxErrorChain,
 }
 
 impl Default for Scanner {
@@ -97,6 +103,8 @@ impl Default for Scanner {
             start: 0,
             current: 0,
             line: 1,
+
+            error_chain: LoxErrorChain::new(),
         }
     }
 }
@@ -412,11 +420,15 @@ impl Scanner {
         self.current >= self.source.len()
     }
 
-    fn error_token(&self, message: &'static str) -> Token {
-        todo!(
-            "change token to take a raw char ptr and stuff a static error message here: {}",
-            message
-        )
+    fn error_token(&mut self, message: &'static str) -> Token {
+        // todo: test that a scan error appears as one
+        let message = message.to_string();
+        self.error_chain.register(ScanError(LoxError {
+            line: self.line,
+            message,
+        }));
+
+        self.make_token(TokenError)
     }
 }
 
@@ -431,6 +443,7 @@ mod test {
             start: 0,
             current: 0,
             line: 1,
+            error_chain: LoxErrorChain::new(),
         }
     }
 
