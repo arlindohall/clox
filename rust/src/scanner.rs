@@ -1,8 +1,8 @@
 use TokenType::*;
 
-use crate::vm::LoxError;
+use crate::vm::LoxError::*;
 use crate::vm::LoxErrorChain;
-use crate::vm::LoxErrorType::*;
+use crate::vm::LoxErrorSpec;
 
 /// The type of token that was scanned.
 ///
@@ -184,9 +184,7 @@ impl Scanner {
                 }
                 '"' => self.string(),
                 '\0' => self.make_token(TokenEof),
-                _ => {
-                    self.error_token("Unrecognized character {}")
-                },
+                _ => self.error_token("Unrecognized character {}"),
             }
         }
     }
@@ -425,7 +423,7 @@ impl Scanner {
     fn error_token(&mut self, message: &'static str) -> Token {
         // todo: test that a scan error appears as one
         let message = message.to_string();
-        self.error_chain.register(ScanError(LoxError {
+        self.error_chain.register(ScanError(LoxErrorSpec {
             line: self.line,
             message,
         }));
@@ -447,6 +445,14 @@ mod test {
             line: 1,
             error_chain: LoxErrorChain::new(),
         }
+    }
+
+    #[test]
+    fn test_error_unterminated_string() {
+        let mut scanner = scanner_of("\"a");
+
+        assert_eq!(TokenError, scanner.scan_token().type_);
+        assert_eq!(TokenEof, scanner.scan_token().type_);
     }
 
     #[test]

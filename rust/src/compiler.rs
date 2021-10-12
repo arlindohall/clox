@@ -4,9 +4,9 @@ use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::scanner::TokenType::*;
 use crate::value::{Value, Value::*};
-use crate::vm::LoxError;
+use crate::vm::LoxError::*;
 use crate::vm::LoxErrorChain;
-use crate::vm::LoxErrorType::*;
+use crate::vm::LoxErrorSpec;
 use crate::vm::Op::*;
 use crate::vm::VM;
 
@@ -152,11 +152,9 @@ impl<'a> Compiler<'a> {
                 break;
             }
 
-            let start = self.parser.current.start;
-            let end = self.parser.current.start + self.parser.current.length;
-            self.error_at_current(&
-                format!("Unable to parse token: {}",
-                self.scanner.copy_segment(start, end)));
+            for err in self.scanner.error_chain.errors() {
+                self.error_chain.register(err);
+            }
         }
     }
 
@@ -166,7 +164,8 @@ impl<'a> Compiler<'a> {
     /// behavior is sort of hidden from the caller. But that lets the
     /// caller do cool things like the following:
     ///
-    /// ```ignore
+    /// ```private-methods
+    /// let vm = VM::default();
     /// let compiler = Compiler::new(&vm);
     /// if compiler.match_(TokenEof) {
     ///     println!("End of file");
@@ -529,7 +528,7 @@ impl<'a> Compiler<'a> {
 
     fn error_at_current(&mut self, message: &str) {
         let message = message.to_string();
-        self.error_chain.register(ParseError(LoxError {
+        self.error_chain.register(ParseError(LoxErrorSpec {
             line: self.parser.current.line,
             message,
         }))
@@ -537,7 +536,7 @@ impl<'a> Compiler<'a> {
 
     fn error(&mut self, message: &str) {
         let message = message.to_string();
-        self.error_chain.register(ParseError(LoxError {
+        self.error_chain.register(ParseError(LoxErrorSpec {
             line: self.parser.previous.line,
             message,
         }))
@@ -707,8 +706,33 @@ mod test {
 
     #[test]
     fn test_compile_error_unexpected_end_of_expr() {
-        let (err, _vm) = compile_broken(";");
+        let (mut err, _vm) = compile_broken(";");
+        let mut errors = err.errors();
 
-        print!("{}", err);
+        assert_eq!(2, errors.len());
+
+        let expr_err = errors.pop().unwrap();
+        let semi_err = errors.pop().unwrap();
+
+        assert!(match &expr_err {
+            ParseError(_) => true,
+            _ => false,
+        });
+        assert!(match &semi_err {
+            ParseError(_) => true,
+            _ => false,
+        });
+    }
+
+    #[test]
+    fn test_compile_error_unterminated_string() {
+        let (mut err, _vm) = compile_broken("\"a");
+        let mut errors = err.errors();
+
+        assert_eq!(1, errors.len());
+        assert!(match errors.pop().unwrap() {
+            ScanError(_) => true,
+            _ => false,
+        });
     }
 }

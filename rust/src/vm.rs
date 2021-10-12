@@ -31,21 +31,21 @@ pub struct VM {
 }
 
 #[derive(Debug)]
-pub struct LoxError {
+pub struct LoxErrorSpec {
     pub line: usize,
     pub message: String,
 }
 
 #[derive(Debug)]
-pub enum LoxErrorType {
-    ScanError(LoxError),
-    ParseError(LoxError),
-    RuntimeError(LoxError),
+pub enum LoxError {
+    ScanError(LoxErrorSpec),
+    ParseError(LoxErrorSpec),
+    RuntimeError(LoxErrorSpec),
 }
 
 #[derive(Debug)]
 pub struct LoxErrorChain {
-    errors: Vec<LoxErrorType>,
+    errors: Vec<LoxError>,
 }
 
 #[repr(u8)]
@@ -109,24 +109,24 @@ impl Display for LoxErrorChain {
     }
 }
 
-impl Display for LoxError {
+impl Display for LoxErrorSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
 
-impl LoxError {
+impl LoxErrorSpec {
     fn to_string(&self) -> String {
         format!("[line={}] {}", self.line, self.message)
     }
 }
 
-impl LoxErrorType {
+impl LoxError {
     fn to_string(&self) -> String {
         match self {
-            LoxErrorType::ScanError(s) => format!("ScanError: {}", s.to_string()),
-            LoxErrorType::ParseError(p) => format!("ParseError: {}", p.to_string()),
-            LoxErrorType::RuntimeError(r) => format!("RuntimeError: {}", r.to_string()),
+            LoxError::ScanError(s) => format!("ScanError: {}", s.to_string()),
+            LoxError::ParseError(p) => format!("ParseError: {}", p.to_string()),
+            LoxError::RuntimeError(r) => format!("RuntimeError: {}", r.to_string()),
         }
     }
 }
@@ -136,7 +136,7 @@ impl LoxErrorChain {
         LoxErrorChain { errors: Vec::new() }
     }
 
-    pub fn register(&mut self, error: LoxErrorType) {
+    pub fn register(&mut self, error: LoxError) {
         self.errors.push(error)
     }
 
@@ -145,13 +145,20 @@ impl LoxErrorChain {
     }
 
     pub(crate) fn print_all(&self) -> () {
-        println!("{}", self.errors
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<String>>()
-            .join("\n"))
+        println!(
+            "{}",
+            self.errors
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<String>>()
+                .join("\n")
+        )
+    }
+
+    pub fn errors(&mut self) -> Vec<LoxError> {
+        std::mem::replace(&mut self.errors, Vec::new())
     }
 }
 
-impl Error for LoxError {}
+impl Error for LoxErrorSpec {}
 impl Error for LoxErrorChain {}
