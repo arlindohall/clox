@@ -88,7 +88,7 @@ impl VM {
 
         match function {
             Ok(func) => println!("Compiled function {:?}", func),
-            Err(error) => println!("Whoopsie-daisy {}", error),
+            Err(error) => println!("{}", error),
         }
 
         self
@@ -142,6 +142,14 @@ impl LoxErrorChain {
 
     pub(crate) fn had_error(&self) -> bool {
         self.errors.len() > 0
+    }
+
+    pub(crate) fn print_all(&self) -> () {
+        println!("{}", self.errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join("\n"))
     }
 }
 

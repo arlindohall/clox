@@ -93,7 +93,7 @@ pub struct Scanner {
 
     line: usize,
 
-    error_chain: LoxErrorChain,
+    pub(crate) error_chain: LoxErrorChain,
 }
 
 impl Default for Scanner {
@@ -184,7 +184,9 @@ impl Scanner {
                 }
                 '"' => self.string(),
                 '\0' => self.make_token(TokenEof),
-                _ => panic!("Unrecognized character {}", self.previous()),
+                _ => {
+                    self.error_token("Unrecognized character {}")
+                },
             }
         }
     }

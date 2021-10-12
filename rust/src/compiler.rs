@@ -154,7 +154,9 @@ impl<'a> Compiler<'a> {
 
             let start = self.parser.current.start;
             let end = self.parser.current.start + self.parser.current.length;
-            self.error_at_current(&self.scanner.copy_segment(start, end));
+            self.error_at_current(&
+                format!("Unable to parse token: {}",
+                self.scanner.copy_segment(start, end)));
         }
     }
 
@@ -550,6 +552,10 @@ impl<'a> Compiler<'a> {
 
         if DEBUG_PRINT_CODE {
             self.function.disassemble_chunk();
+        }
+
+        if self.scanner.error_chain.had_error() {
+            self.scanner.error_chain.print_all();
         }
 
         if self.error_chain.had_error() {
