@@ -164,7 +164,7 @@ impl<'a> Compiler<'a> {
     /// behavior is sort of hidden from the caller. But that lets the
     /// caller do cool things like the following:
     ///
-    /// ```private-methods
+    /// ```not-public
     /// let vm = VM::default();
     /// let compiler = Compiler::new(&vm);
     /// if compiler.match_(TokenEof) {
