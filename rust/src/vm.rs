@@ -50,8 +50,9 @@ pub struct LoxErrorChain {
 
 #[repr(u8)]
 pub enum Op {
-    OpDefineGlobal,
+    OpAdd,
     OpConstant,
+    OpDefineGlobal,
     OpPop,
     OpPrint,
     OpNil,

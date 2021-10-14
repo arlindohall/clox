@@ -76,7 +76,7 @@ enum Precedence {
     _PrecAnd,
     _PrecEquality,
     _PrecComparison,
-    _PrecTerm,
+    PrecTerm,
     _PrecFactor,
     _PrecUnary,
     _PrecCall,
@@ -487,7 +487,11 @@ impl<'a> Compiler<'a> {
                 precedence: PrecAssignment,
             },
             TokenOr => todo!(),
-            TokenPlus => todo!(),
+            TokenPlus => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecTerm,
+            },
             TokenPrint => todo!(),
             TokenReturn => todo!(),
             TokenRightBrace => todo!(),
@@ -574,12 +578,38 @@ impl Precedence {
             _PrecAnd => 3,
             _PrecEquality => 4,
             _PrecComparison => 5,
-            _PrecTerm => 6,
+            PrecTerm => 6,
             _PrecFactor => 7,
             _PrecUnary => 8,
             _PrecCall => 9,
             _PrecPrimary => 10,
         }
+    }
+
+    fn from_u8(num: u8) -> Self {
+        for p in Precedence::values() {
+            if p.as_u8() == num {
+                return p;
+            }
+        }
+
+        panic!("Internal lox error: unable to match expression precedence.");
+    }
+
+    fn values() -> Vec<Precedence> {
+        vec![
+            PrecNone,
+            PrecAssignment,
+            _PrecOr,
+            _PrecAnd,
+            _PrecEquality,
+            _PrecComparison,
+            PrecTerm,
+            _PrecFactor,
+            _PrecUnary,
+            _PrecCall,
+            _PrecPrimary,
+        ]
     }
 }
 
@@ -591,6 +621,39 @@ fn number(this: &mut Compiler, _can_assign: bool) {
 
     let index = this.make_constant(Value::Number(value));
     this.emit_bytes(OpConstant as u8, index);
+}
+
+/// Same logic for all binary operators such as plus, times etc.
+///
+/// The strategy is remember the operator, parse an expression to
+/// the right with strictly higher precedence (plus will parse times)
+/// and then emit a binary operator that will pull the left and
+/// right values off the stack.
+fn binary(this: &mut Compiler, _can_assign: bool) {
+    let token = this.parser.previous.type_.clone();
+    let rule = this.get_rule(&token);
+    // To safely call this, you must guarantee that there are
+    // no parse rules that produce binary with the highest
+    // precedence (PrecPrimary)
+    let prec = Precedence::from_u8(rule.precedence.as_u8() + 1);
+
+    this.expression_with_precedence(prec);
+
+    match token {
+        TokenAnd => todo!(),
+        TokenBangEqual => todo!(),
+        TokenEqualEqual => todo!(),
+        TokenGreater => todo!(),
+        TokenGreaterEqual => todo!(),
+        TokenLess => todo!(),
+        TokenLessEqual => todo!(),
+        TokenMinus => todo!(),
+        TokenOr => todo!(),
+        TokenPlus => this.emit_byte(OpAdd as u8),
+        TokenSlash => todo!(),
+        TokenStar => todo!(),
+        _ => panic!("Internal lox error: impossible state"),
+    }
 }
 
 fn string(this: &mut Compiler, _can_assign: bool) {
@@ -700,6 +763,24 @@ mod test {
                 OpPrint as u8,
                 OpPop as u8,
                 OpReturn as u8
+            ]
+        );
+    }
+
+    #[test]
+    fn test_add_two_numbers() {
+        let (bytecode, _vm) = compile_expression("1+1;");
+
+        assert_eq!(
+            bytecode.chunk,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpAdd as u8,
+                OpPop as u8,
+                OpReturn as u8,
             ]
         );
     }
