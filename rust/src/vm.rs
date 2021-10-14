@@ -56,7 +56,10 @@ pub enum Op {
     OpPop,
     OpPrint,
     OpNil,
+    OpNegate,
+    OpNot,
     OpReturn,
+    OpSubtract,
 }
 
 /// I just did this because Clippy told me to.

@@ -480,7 +480,11 @@ impl<'a> Compiler<'a> {
             TokenLeftParen => todo!(),
             TokenLess => todo!(),
             TokenLessEqual => todo!(),
-            TokenMinus => todo!(),
+            TokenMinus => ParseRule {
+                prefix_rule: Some(unary),
+                infix_rule: Some(binary),
+                precedence: PrecTerm,
+            },
             TokenNil => todo!(),
             TokenNumber => ParseRule {
                 prefix_rule: Some(number),
@@ -655,12 +659,28 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
         TokenGreaterEqual => todo!(),
         TokenLess => todo!(),
         TokenLessEqual => todo!(),
-        TokenMinus => todo!(),
+        TokenMinus => this.emit_byte(OpSubtract as u8),
         TokenOr => todo!(),
         TokenPlus => this.emit_byte(OpAdd as u8),
         TokenSlash => todo!(),
         TokenStar => todo!(),
-        _ => panic!("Internal lox error: impossible state"),
+        _ => this.error_at_current("Impossible binary operator. (this is an interpreter bug)")
+    }
+}
+
+fn unary(this: &mut Compiler, _can_assign: bool) {
+    let token = this.parser.previous.type_.clone();
+    let rule = this.get_rule(&token);
+    let mut uprec: u8 = rule.precedence.into();
+    uprec += 1;
+    let prec = uprec.into();
+
+    this.expression_with_precedence(prec);
+
+    match token {
+        TokenBang => this.emit_byte(OpNot as u8),
+        TokenMinus => this.emit_byte(OpNegate as u8),
+        _ => this.error_at_current("Impossible unary operator. (this is an interpreter bug)"),
     }
 }
 
@@ -787,6 +807,40 @@ mod test {
                 OpConstant as u8,
                 1,
                 OpAdd as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_subtract_two_numbers() {
+        let (bytecode, _vm) = compile_expression("1-1;");
+
+        assert_eq!(
+            bytecode.chunk,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpSubtract as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_negate_a_number() {
+        let (bytecode, _vm) = compile_expression("-1;");
+
+        assert_eq!(
+            bytecode.chunk,
+            vec![
+                OpConstant as u8,
+                0,
+                OpNegate as u8,
                 OpPop as u8,
                 OpReturn as u8,
             ]
