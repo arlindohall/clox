@@ -2,3 +2,4 @@ build.ninja
 .ninja_log
 build
 target
+.vscode
