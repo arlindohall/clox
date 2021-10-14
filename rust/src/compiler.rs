@@ -68,7 +68,7 @@ pub struct Function {
     constants: Vec<Value>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Precedence {
     PrecNone,
     PrecAssignment,
@@ -420,17 +420,18 @@ impl<'a> Compiler<'a> {
     }
 
     fn expression_with_precedence(&mut self, precedence: Precedence) {
+        let precedence: u8 = precedence.into();
         self.advance();
 
         let prefix_rule: Option<ParseFn> = self.previous_rule().prefix_rule;
-        let can_assign = precedence.as_u8() <= PrecAssignment.as_u8();
+        let can_assign = precedence <= PrecAssignment.into();
 
         match prefix_rule {
             Some(rule) => rule(self, can_assign),
             None => self.error("Expect expression."),
         }
 
-        while precedence.as_u8() <= self.current_rule().precedence.as_u8() {
+        while precedence <= self.current_rule().precedence.into() {
             self.advance();
             if let Some(infix_rule) = self.previous_rule().infix_rule {
                 infix_rule(self, can_assign);
@@ -570,32 +571,6 @@ impl<'a> Compiler<'a> {
 }
 
 impl Precedence {
-    fn as_u8(&self) -> u8 {
-        match self {
-            PrecNone => 0,
-            PrecAssignment => 1,
-            _PrecOr => 2,
-            _PrecAnd => 3,
-            _PrecEquality => 4,
-            _PrecComparison => 5,
-            PrecTerm => 6,
-            _PrecFactor => 7,
-            _PrecUnary => 8,
-            _PrecCall => 9,
-            _PrecPrimary => 10,
-        }
-    }
-
-    fn from_u8(num: u8) -> Self {
-        for p in Precedence::values() {
-            if p.as_u8() == num {
-                return p;
-            }
-        }
-
-        panic!("Internal lox error: unable to match expression precedence.");
-    }
-
     fn values() -> Vec<Precedence> {
         vec![
             PrecNone,
@@ -610,6 +585,37 @@ impl Precedence {
             _PrecCall,
             _PrecPrimary,
         ]
+    }
+}
+
+impl From<Precedence> for u8 {
+    fn from(prec: Precedence) -> Self {
+        match prec {
+            PrecNone => 0,
+            PrecAssignment => 1,
+            _PrecOr => 2,
+            _PrecAnd => 3,
+            _PrecEquality => 4,
+            _PrecComparison => 5,
+            PrecTerm => 6,
+            _PrecFactor => 7,
+            _PrecUnary => 8,
+            _PrecCall => 9,
+            _PrecPrimary => 10,
+        }
+    }
+}
+
+impl From<u8> for Precedence {
+    fn from(num: u8) -> Self {
+        for p in Precedence::values() {
+            let prec: u8 = p.clone().into();
+            if prec == num {
+                return p;
+            }
+        }
+
+        panic!("Internal lox error: unable to match expression precedence.");
     }
 }
 
@@ -635,7 +641,9 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
     // To safely call this, you must guarantee that there are
     // no parse rules that produce binary with the highest
     // precedence (PrecPrimary)
-    let prec = Precedence::from_u8(rule.precedence.as_u8() + 1);
+    let mut uprec: u8 = rule.precedence.into();
+    uprec += 1;
+    let prec  = uprec.into();
 
     this.expression_with_precedence(prec);
 
