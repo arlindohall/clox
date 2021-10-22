@@ -7,10 +7,18 @@ use crate::value::{Value, Value::*};
 use crate::vm::LoxError::*;
 use crate::vm::LoxErrorChain;
 use crate::vm::LoxErrorSpec;
+use crate::vm::Op;
 use crate::vm::Op::*;
 use crate::vm::VM;
 
-static DEBUG_PRINT_CODE: bool = false;
+#[allow(dead_code)]
+pub(crate) enum DebugOutput {
+    None,
+    Table,
+    GraphViz,
+}
+
+static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::GraphViz;
 const UNINITIALIZED: isize = -1;
 
 /// Compiler used for a single function or script.
@@ -549,8 +557,10 @@ impl<'a> Compiler<'a> {
     fn end_compiler(mut self) -> Result<Function, LoxErrorChain> {
         self.emit_return();
 
-        if DEBUG_PRINT_CODE {
-            self.function.disassemble_chunk();
+        match DEBUG_PRINT_CODE {
+            DebugOutput::Table => self.function.disassemble_chunk(),
+            DebugOutput::GraphViz => self.function.graph_output_chunk(),
+            DebugOutput::None => ()
         }
 
         if self.scanner.error_chain.had_error() {
@@ -618,7 +628,63 @@ impl ConvertNumber for String {
 
 impl Function {
     fn disassemble_chunk(&self) {
-        todo!("debug print this function")
+        eprintln!("digraph chunk {{");
+        let mut instruction = 0;
+        for op in &self.chunk {
+            let op = op.into();
+            self.print_instruction(instruction, &op);
+
+            instruction += 1;
+        }
+        eprintln!("}}");
+        todo!("output memory and code as graphviz")
+    }
+
+    fn graph_output_chunk(&self) {
+        eprintln!("digraph chunk {{");
+        let mut i = 0;
+
+        while i < self.chunk.len() - 1 {
+            let op = self.chunk.get(i)
+                .unwrap()
+                .into();
+
+            match op {
+                OpDefineGlobal => self.graph_instruction(i, &op),
+                OpConstant => {
+                    self.graph_constant(i, &op);
+                    i += 1;
+                },
+                OpPop => self.graph_instruction(i, &op),
+                OpPrint => self.graph_instruction(i, &op),
+                OpNil => self.graph_instruction(i, &op),
+                OpReturn => self.graph_instruction(i, &op),
+            }
+
+            i += 1;
+        }
+        eprintln!("}}");
+        todo!("output memory and code as graphviz")
+    }
+
+    fn print_instruction(&self, instruction: u32, op: &Op) {
+        eprintln!("{}{:?};", instruction, op);
+    }
+
+    fn graph_constant(&self, i: usize, op: &Op) {
+        let c = self.chunk.get(i+1).unwrap();
+        let next: Op = self.chunk.get(i+2)
+            .unwrap()
+            .into();
+        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i+1, c);
+        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i+2, next);
+    }
+
+    fn graph_instruction(&self, i: usize, op: &Op) {
+        let next: Op = self.chunk.get(i+1)
+            .unwrap()
+            .into();
+        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i+1, next);
     }
 }
 

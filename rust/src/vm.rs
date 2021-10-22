@@ -48,6 +48,7 @@ pub struct LoxErrorChain {
     errors: Vec<LoxError>,
 }
 
+#[derive(Debug)]
 #[repr(u8)]
 pub enum Op {
     OpDefineGlobal,
@@ -57,6 +58,35 @@ pub enum Op {
     OpNil,
     OpReturn,
 }
+
+impl From<&Op> for u8 {
+    fn from(op: &Op) -> u8 {
+        match op {
+            Op::OpDefineGlobal => 0,
+            Op::OpConstant => 1,
+            Op::OpPop => 2,
+            Op::OpPrint => 3,
+            Op::OpNil => 4,
+            Op::OpReturn => 5,
+        }
+    }
+}
+
+impl From<&u8> for Op {
+    fn from(op: &u8) -> Op {
+        match op {
+            0 => Op::OpDefineGlobal,
+            1 => Op::OpConstant,
+            2 => Op::OpPop,
+            3 => Op::OpPrint,
+            4 => Op::OpNil,
+            5 => Op::OpReturn,
+            _ => panic!("Impossible op")
+        }
+    }
+}
+
+
 
 /// I just did this because Clippy told me to.
 impl Default for VM {
