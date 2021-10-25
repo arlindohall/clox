@@ -61,6 +61,7 @@ pub struct LoxErrorChain {
     errors: Vec<LoxError>,
 }
 
+#[derive(Clone, Debug)]
 #[repr(u8)]
 pub enum Op {
     OpAdd,
@@ -76,6 +77,27 @@ pub enum Op {
 }
 
 use Op::*;
+
+impl From<&Op> for u8 {
+    fn from(op: &Op) -> u8 {
+        op.clone() as u8
+    }
+}
+
+impl From<&u8> for Op {
+    fn from(op: &u8) -> Op {
+        match op {
+            0 => OpDefineGlobal,
+            1 => OpConstant,
+            2 => OpPop,
+            3 => OpPrint,
+            4 => OpNil,
+            5 => OpReturn,
+            _ => panic!("Impossible op")
+        }
+    }
+}
+
 
 /// I just did this because Clippy told me to.
 impl Default for VM {
@@ -189,18 +211,6 @@ impl VM {
             str1,
             str2
         )
-    }
-}
-
-impl Into<u8> for &Op {
-    fn into(self) -> u8 {
-        todo!("located in another branch")
-    }
-}
-
-impl Into<Op> for &u8 {
-    fn into(self) -> Op {
-        todo!("located in another branch")
     }
 }
 
