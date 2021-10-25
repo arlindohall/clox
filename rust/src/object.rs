@@ -49,13 +49,13 @@ impl Object {
     pub fn as_mut_function(&mut self) -> &mut Function {
         match self {
             Object::ObjFunction(f) => f,
-            _ => panic!("Internal error: expected lox function type.")
+            _ => panic!("Internal error: expected lox function type."),
         }
     }
     pub fn as_function(&self) -> &Function {
         match self {
             Object::ObjFunction(f) => f,
-            _ => panic!("Internal error: expected lox function type.")
+            _ => panic!("Internal error: expected lox function type."),
         }
     }
 }

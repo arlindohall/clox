@@ -1,3 +1,4 @@
+use crate::object::MemoryEntry;
 use crate::object::Object::*;
 use crate::scanner::Scanner;
 use crate::scanner::Token;
@@ -29,7 +30,7 @@ pub struct Compiler<'a> {
     scanner: Scanner,
     parser: Parser,
 
-    function: FunctionRef,
+    function: MemoryEntry,
     locals: Vec<Local>,
 
     scope_depth: isize,
@@ -64,12 +65,10 @@ struct Parser {
 /// stored in a closure structure.
 #[derive(Debug)]
 pub struct Function {
-    chunk: Vec<u8>,
+    pub(crate) chunk: Vec<u8>,
     constants: Vec<Value>,
     pub(crate) arity: usize,
 }
-
-pub type FunctionRef = usize;
 
 #[derive(Debug, Clone)]
 enum Precedence {
@@ -131,7 +130,7 @@ impl<'a> Compiler<'a> {
     ///
     /// The statement passed in can be a group of statements separated
     /// by a ';' character, as specified in Lox grammar.
-    pub fn compile(mut self, statement: &str) -> Result<FunctionRef, LoxErrorChain> {
+    pub fn compile(mut self, statement: &str) -> Result<MemoryEntry, LoxErrorChain> {
         self.scanner.take_str(statement);
 
         self.advance();
@@ -561,7 +560,7 @@ impl<'a> Compiler<'a> {
         todo!("recover after an error")
     }
 
-    fn end_compiler(mut self) -> Result<FunctionRef, LoxErrorChain> {
+    fn end_compiler(mut self) -> Result<MemoryEntry, LoxErrorChain> {
         self.emit_return();
 
         if DEBUG_PRINT_CODE {
@@ -580,10 +579,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn function(&mut self) -> &mut Function {
-        self.vm
-            .memory
-            .retrieve_mut(self.function)
-            .as_mut_function()
+        self.vm.memory.retrieve_mut(self.function).as_mut_function()
     }
 }
 
@@ -660,7 +656,7 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
     // precedence (PrecPrimary)
     let mut uprec: u8 = rule.precedence.into();
     uprec += 1;
-    let prec  = uprec.into();
+    let prec = uprec.into();
 
     this.expression_with_precedence(prec);
 
@@ -677,7 +673,7 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
         TokenPlus => this.emit_byte(OpAdd as u8),
         TokenSlash => todo!(),
         TokenStar => todo!(),
-        _ => this.error_at_current("Impossible binary operator. (this is an interpreter bug)")
+        _ => this.error_at_current("Impossible binary operator. (this is an interpreter bug)"),
     }
 }
 
@@ -728,9 +724,10 @@ impl Function {
 
 #[cfg(test)]
 mod test {
+
     use super::*;
 
-    fn compile_expression(expr: &str) -> (FunctionRef, VM) {
+    fn compile_expression(expr: &str) -> (MemoryEntry, VM) {
         let mut vm = VM::default();
         let compiler = Compiler::new(&mut vm);
         let function = compiler.compile(expr).unwrap();

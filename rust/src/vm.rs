@@ -1,9 +1,10 @@
 use std::error::Error;
 use std::fmt::Display;
 
-use crate::compiler::{Compiler, FunctionRef};
+use crate::compiler::{Compiler, Function};
 use crate::object::{Memory, MemoryEntry};
 use crate::value::Value;
+use crate::value::Value::*;
 
 const MAX_FRAMES: usize = 265;
 
@@ -74,6 +75,8 @@ pub enum Op {
     OpSubtract,
 }
 
+use Op::*;
+
 /// I just did this because Clippy told me to.
 impl Default for VM {
     /// Create a new VM instance and set up its compiler
@@ -107,14 +110,14 @@ impl VM {
             Ok(func) => {
                 self.call(func, 0, 0);
                 self.run();
-            },
+            }
             Err(error) => println!("{}", error),
         }
 
         self
     }
 
-    fn call(&mut self, closure: FunctionRef, mem_entry: MemoryEntry, argc: usize) {
+    fn call(&mut self, closure: MemoryEntry, mem_entry: MemoryEntry, argc: usize) {
         let closure = self.memory.retrieve_mut(closure).as_function();
         if closure.arity != argc {
             let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
@@ -137,8 +140,67 @@ impl VM {
         todo!("emit runtime failure for: {}", message)
     }
 
-    pub fn run(&self) {
-        todo!("start executing bytecode")
+    pub fn run(&mut self) {
+        loop {
+            let frame = self.frames.get(self.frames.len() - 1).unwrap();
+            let op = self.closure(frame).chunk.get(frame.ip).unwrap().into();
+
+            match op {
+                OpAdd => {
+                    let v1 = self.stack.pop().unwrap();
+                    let v2 = self.stack.pop().unwrap();
+
+                    if v1.is_string() && v2.is_string() {
+                        let string = self.concatenate(v1.as_string(), v2.as_string());
+                        self.stack.push(string)
+                    } else if v1.is_number() && v2.is_number() {
+                        let number = Number(v1.as_number() + v2.as_number());
+                        self.stack.push(number)
+                    } else {
+                        self.runtime_error("Operands must be two numbers or two strings.")
+                    }
+                }
+                OpConstant => todo!(),
+                OpDefineGlobal => todo!(),
+                OpPop => {
+                    self.stack.pop();
+                }
+                OpPrint => {
+                    let val = self.stack.get(self.stack.len() - 1).unwrap();
+
+                    println!("{:?}", val);
+                }
+                OpNil => todo!(),
+                OpNegate => todo!(),
+                OpNot => todo!(),
+                OpReturn => todo!(),
+                OpSubtract => todo!(),
+            }
+        }
+    }
+
+    fn closure(&self, frame: &CallFrame) -> &Function {
+        self.memory.retrieve(frame.ip).as_function()
+    }
+
+    pub fn concatenate(&self, str1: &str, str2: &str) -> Value {
+        todo!(
+            "concatenate two strings and intern the result ({}, {})",
+            str1,
+            str2
+        )
+    }
+}
+
+impl Into<u8> for &Op {
+    fn into(self) -> u8 {
+        todo!("located in another branch")
+    }
+}
+
+impl Into<Op> for &u8 {
+    fn into(self) -> Op {
+        todo!("located in another branch")
     }
 }
 
