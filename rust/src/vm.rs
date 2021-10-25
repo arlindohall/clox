@@ -1,9 +1,11 @@
 use std::error::Error;
 use std::fmt::Display;
 
-use crate::compiler::Compiler;
-use crate::object::Memory;
+use crate::compiler::{Compiler, FunctionRef};
+use crate::object::{Memory, MemoryEntry};
 use crate::value::Value;
+
+const MAX_FRAMES: usize = 265;
 
 /// Lox Virtual Machine.
 ///
@@ -20,14 +22,24 @@ use crate::value::Value;
 /// ```
 /// # use loxvm::vm::VM;
 /// let mut vm = VM::default();
-/// // todo
-/// // vm.interpret("print \"Hello, world!\"");
+/// vm.interpret("print \"Hello, world!\"");
 /// ```
 #[derive(Debug)]
 pub struct VM {
     stack: Vec<Value>,
 
+    // todo: replace all pub with pub(crate) where possible
     pub memory: Memory,
+
+    frames: Vec<CallFrame>,
+    ip: usize,
+}
+
+#[derive(Debug)]
+struct CallFrame {
+    closure: MemoryEntry,
+    ip: usize,
+    slots: usize,
 }
 
 #[derive(Debug)]
@@ -73,8 +85,9 @@ impl Default for VM {
     fn default() -> Self {
         VM {
             stack: Vec::new(),
-
             memory: Memory::new(),
+            ip: 0,
+            frames: Vec::new(),
         }
     }
 }
@@ -91,11 +104,41 @@ impl VM {
         let function = compiler.compile(statement);
 
         match function {
-            Ok(func) => println!("Compiled function {:?}", func),
+            Ok(func) => {
+                self.call(func, 0, 0);
+                self.run();
+            },
             Err(error) => println!("{}", error),
         }
 
         self
+    }
+
+    fn call(&mut self, closure: FunctionRef, mem_entry: MemoryEntry, argc: usize) {
+        let closure = self.memory.retrieve_mut(closure).as_function();
+        if closure.arity != argc {
+            let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
+            self.runtime_error(message);
+        }
+
+        if self.frames.len() >= MAX_FRAMES {
+            self.runtime_error("Stack overflow.");
+        }
+
+        self.frames.push(CallFrame {
+            closure: mem_entry,
+            ip: 0,
+            slots: 0,
+            // slots: self.stack.len() - argc - 1,
+        });
+    }
+
+    fn runtime_error(&self, message: &str) {
+        todo!("emit runtime failure for: {}", message)
+    }
+
+    pub fn run(&self) {
+        todo!("start executing bytecode")
     }
 }
 
@@ -166,3 +209,13 @@ impl LoxErrorChain {
 
 impl Error for LoxErrorSpec {}
 impl Error for LoxErrorChain {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_run_hello_world_function() {
+        VM::default().interpret("print \"Hello, world!\";");
+    }
+}

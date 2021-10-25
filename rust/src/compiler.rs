@@ -29,7 +29,7 @@ pub struct Compiler<'a> {
     scanner: Scanner,
     parser: Parser,
 
-    function: Function,
+    function: FunctionRef,
     locals: Vec<Local>,
 
     scope_depth: isize,
@@ -66,7 +66,10 @@ struct Parser {
 pub struct Function {
     chunk: Vec<u8>,
     constants: Vec<Value>,
+    pub(crate) arity: usize,
 }
+
+pub type FunctionRef = usize;
 
 #[derive(Debug, Clone)]
 enum Precedence {
@@ -102,8 +105,15 @@ impl<'a> Compiler<'a> {
     /// This method also initializes the scanner and parser, and
     /// is fine to use any time we need a new [Compiler]
     pub fn new(vm: &mut VM) -> Compiler {
+        let entry_point = Function {
+            arity: 0,
+            chunk: Vec::new(),
+            constants: Vec::new(),
+        };
+        let function = vm.memory.allocate(ObjFunction(entry_point));
         Compiler {
             vm,
+            function,
             ancestors: Vec::new(),
             scanner: Scanner::default(),
             parser: Parser {
@@ -113,10 +123,6 @@ impl<'a> Compiler<'a> {
             },
             scope_depth: 0,
             locals: Vec::new(),
-            function: Function {
-                chunk: Vec::new(),
-                constants: Vec::new(),
-            },
             error_chain: LoxErrorChain::new(),
         }
     }
@@ -125,7 +131,7 @@ impl<'a> Compiler<'a> {
     ///
     /// The statement passed in can be a group of statements separated
     /// by a ';' character, as specified in Lox grammar.
-    pub fn compile(mut self, statement: &str) -> Result<Function, LoxErrorChain> {
+    pub fn compile(mut self, statement: &str) -> Result<FunctionRef, LoxErrorChain> {
         self.scanner.take_str(statement);
 
         self.advance();
@@ -284,7 +290,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_byte(&mut self, op: u8) {
-        self.function.chunk.push(op)
+        self.function().chunk.push(op)
     }
 
     fn emit_return(&mut self) {
@@ -527,11 +533,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
-        if self.function.constants.len() >= 256 {
+        if self.function().constants.len() >= 256 {
             todo!("error handling for over-full constant table")
         } else {
-            self.function.constants.push(value);
-            (self.function.constants.len() - 1) as u8
+            self.function().constants.push(value);
+            (self.function().constants.len() - 1) as u8
         }
     }
 
@@ -555,11 +561,11 @@ impl<'a> Compiler<'a> {
         todo!("recover after an error")
     }
 
-    fn end_compiler(mut self) -> Result<Function, LoxErrorChain> {
+    fn end_compiler(mut self) -> Result<FunctionRef, LoxErrorChain> {
         self.emit_return();
 
         if DEBUG_PRINT_CODE {
-            self.function.disassemble_chunk();
+            self.function().disassemble_chunk();
         }
 
         if self.scanner.error_chain.had_error() {
@@ -571,6 +577,13 @@ impl<'a> Compiler<'a> {
         } else {
             Ok(self.function)
         }
+    }
+
+    fn function(&mut self) -> &mut Function {
+        self.vm
+            .memory
+            .retrieve_mut(self.function)
+            .as_mut_function()
     }
 }
 
@@ -717,11 +730,12 @@ impl Function {
 mod test {
     use super::*;
 
-    fn compile_expression(expr: &str) -> (Function, VM) {
+    fn compile_expression(expr: &str) -> (FunctionRef, VM) {
         let mut vm = VM::default();
         let compiler = Compiler::new(&mut vm);
+        let function = compiler.compile(expr).unwrap();
 
-        (compiler.compile(expr).unwrap(), vm)
+        (function, vm)
     }
 
     fn compile_broken(expr: &str) -> (LoxErrorChain, VM) {
@@ -733,7 +747,8 @@ mod test {
 
     #[test]
     fn test_compile_variable_declaration() {
-        let (bytecode, mut vm) = compile_expression("var x;");
+        let (bytecode, vm) = compile_expression("var x;");
+        let bytecode = vm.memory.retrieve(bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -755,7 +770,8 @@ mod test {
 
     #[test]
     fn test_compile_simple_integer_expression() {
-        let (bytecode, _vm) = compile_expression("1;");
+        let (bytecode, vm) = compile_expression("1;");
+        let bytecode = vm.memory.retrieve(bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -765,7 +781,8 @@ mod test {
 
     #[test]
     fn test_compile_print_expression() {
-        let (bytecode, _vm) = compile_expression("print 1;");
+        let (bytecode, vm) = compile_expression("print 1;");
+        let bytecode = vm.memory.retrieve(bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -781,7 +798,8 @@ mod test {
 
     #[test]
     fn test_compile_print_string() {
-        let (bytecode, _vm) = compile_expression("print \"hello\";");
+        let (bytecode, vm) = compile_expression("print \"hello\";");
+        let bytecode = vm.memory.retrieve(bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -797,7 +815,8 @@ mod test {
 
     #[test]
     fn test_add_two_numbers() {
-        let (bytecode, _vm) = compile_expression("1+1;");
+        let (bytecode, vm) = compile_expression("1+1;");
+        let bytecode = vm.memory.retrieve(bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -815,7 +834,8 @@ mod test {
 
     #[test]
     fn test_subtract_two_numbers() {
-        let (bytecode, _vm) = compile_expression("1-1;");
+        let (bytecode, vm) = compile_expression("1-1;");
+        let bytecode = vm.memory.retrieve(bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -833,7 +853,8 @@ mod test {
 
     #[test]
     fn test_negate_a_number() {
-        let (bytecode, _vm) = compile_expression("-1;");
+        let (bytecode, vm) = compile_expression("-1;");
+        let bytecode = vm.memory.retrieve(bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,

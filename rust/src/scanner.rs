@@ -421,7 +421,6 @@ impl Scanner {
     }
 
     fn error_token(&mut self, message: &'static str) -> Token {
-        // todo: test that a scan error appears as one
         let message = message.to_string();
         self.error_chain.register(ScanError(LoxErrorSpec {
             line: self.line,
