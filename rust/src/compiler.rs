@@ -752,30 +752,33 @@ impl Function {
             match op {
                 OpDefineGlobal => self.graph_instruction(i, &op),
                 OpConstant => {
-                    self.graph_constant(i, &op);
+                    self.graph_binary(i, &op);
                     i += 1;
                 },
                 OpPop => self.graph_instruction(i, &op),
                 OpPrint => self.graph_instruction(i, &op),
                 OpNil => self.graph_instruction(i, &op),
                 OpReturn => self.graph_instruction(i, &op),
-                OpAdd => todo!(),
-                OpNegate => todo!(),
-                OpNot => todo!(),
+                OpAdd => todo!("visualize binary add operation"),
+                OpNegate => todo!("visualize binary negate operation"),
+                OpNot => {
+                    self.graph_binary(i, &op);
+                    i += 1;
+                }
                 OpSubtract => todo!(),
             }
 
             i += 1;
         }
         eprintln!("}}");
-        todo!("output memory and code as graphviz")
     }
 
     fn print_instruction(&self, instruction: u32, op: &Op) {
         eprintln!("{}{:?};", instruction, op);
     }
 
-    fn graph_constant(&self, i: usize, op: &Op) {
+    fn graph_binary(&self, i: usize, op: &Op) {
+        // todo: graph the constant itself, not the pointer
         let c = self.chunk.get(i+1).unwrap();
         let next: Op = self.chunk.get(i+2)
             .unwrap()

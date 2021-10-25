@@ -87,12 +87,16 @@ impl From<&Op> for u8 {
 impl From<&u8> for Op {
     fn from(op: &u8) -> Op {
         match op {
-            0 => OpDefineGlobal,
+            0 => OpAdd,
             1 => OpConstant,
-            2 => OpPop,
-            3 => OpPrint,
-            4 => OpNil,
-            5 => OpReturn,
+            2 => OpDefineGlobal,
+            3 => OpPop,
+            4 => OpPrint,
+            5 => OpNil,
+            6 => OpNegate,
+            7 => OpNot,
+            8 => OpReturn,
+            9 => OpSubtract,
             _ => panic!("Impossible op")
         }
     }
@@ -182,7 +186,7 @@ impl VM {
                         self.runtime_error("Operands must be two numbers or two strings.")
                     }
                 }
-                OpConstant => todo!(),
+                OpConstant => todo!("push a constant to the stack"),
                 OpDefineGlobal => todo!(),
                 OpPop => {
                     self.stack.pop();
