@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::compiler::Function;
 
@@ -29,7 +29,7 @@ pub enum Object {
 pub struct Memory {
     count: usize,
     memory: HashMap<MemoryEntry, Object>,
-    strings: HashSet<String>,
+    strings: HashMap<Box<String>, MemoryEntry>,
 }
 
 impl Default for Memory {
@@ -37,18 +37,18 @@ impl Default for Memory {
         Memory {
             count: 0,
             memory: HashMap::new(),
-            strings: HashSet::new(),
+            strings: HashMap::new(),
         }
     }
 }
 
 impl Memory {
     pub fn allocate(&mut self, object: Object) -> MemoryEntry {
-        let m_loc = mem(self.count);
-        self.memory.insert(m_loc.clone(), object);
-        self.count += 1;
-
-        m_loc
+        if let Object::ObjString(s) = object {
+            self.intern(s)
+        } else {
+            self.insert(object)
+        }
     }
 
     pub fn retrieve_mut(&mut self, index: &MemoryEntry) -> &mut Object {
@@ -57,6 +57,23 @@ impl Memory {
 
     pub fn retrieve(&self, index: &MemoryEntry) -> &Object {
         self.memory.get(index).unwrap()
+    }
+
+    fn intern(&mut self, string: Box<String>) -> MemoryEntry {
+        match self.strings.get(&string) {
+            Some(m_loc) => m_loc.clone(),
+            None => {
+                self.insert(Object::ObjString(string))
+            }
+        }
+    }
+
+    fn insert(&mut self, object: Object) -> MemoryEntry {
+        let m_loc = mem(self.count);
+        self.memory.insert(m_loc.clone(), object);
+        self.count += 1;
+
+        m_loc
     }
 }
 impl Object {
