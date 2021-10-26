@@ -130,7 +130,7 @@ impl<'a> Compiler<'a> {
             },
             scope_depth: 0,
             locals: Vec::new(),
-            error_chain: LoxErrorChain::new(),
+            error_chain: LoxErrorChain::default(),
         }
     }
 
@@ -143,7 +143,7 @@ impl<'a> Compiler<'a> {
 
         self.advance();
 
-        while !self.match_(TokenEof) {
+        while !self.match_(Eof) {
             self.declaration();
         }
 
@@ -161,7 +161,7 @@ impl<'a> Compiler<'a> {
         loop {
             self.parser.current = self.scanner.scan_token();
 
-            if self.parser.current.type_ != TokenError {
+            if self.parser.current.type_ != Error {
                 break;
             }
 
@@ -180,7 +180,7 @@ impl<'a> Compiler<'a> {
     /// ```not-public
     /// let vm = VM::default();
     /// let compiler = Compiler::new(&vm);
-    /// if compiler.match_(TokenEof) {
+    /// if compiler.match_(Eof) {
     ///     println!("End of file");
     /// }
     /// ```
@@ -210,11 +210,11 @@ impl<'a> Compiler<'a> {
     ///                 | statement`
     /// ```
     fn declaration(&mut self) {
-        if self.match_(TokenClass) {
+        if self.match_(Class) {
             self.class_declaration();
-        } else if self.match_(TokenFun) {
+        } else if self.match_(Fun) {
             self.fun_declaration();
-        } else if self.match_(TokenVar) {
+        } else if self.match_(Var) {
             self.var_declaration();
         } else {
             self.statement();
@@ -251,12 +251,12 @@ impl<'a> Compiler<'a> {
     fn var_declaration(&mut self) {
         let name = self.parse_variable("Expect variable name.");
 
-        if self.match_(TokenEqual) {
+        if self.match_(Equal) {
             self.expression();
         } else {
             self.emit_byte(OpNil as u8);
         }
-        self.consume(TokenSemicolon, "Expect ';' after variable declaration.");
+        self.consume(Semicolon, "Expect ';' after variable declaration.");
 
         self.define_variable(name);
     }
@@ -305,7 +305,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn parse_variable(&mut self, message: &str) -> u8 {
-        self.consume(TokenIdentifier, message);
+        self.consume(Identifier, message);
 
         self.declare_variable();
         if self.scope_depth > 0 {
@@ -347,7 +347,7 @@ impl<'a> Compiler<'a> {
         todo!("compare two tokens")
     }
 
-    fn add_local(&self, _name: &&Token) -> () {
+    fn add_local(&self, _name: &&Token) {
         todo!("add a local variable to the current scope")
     }
 
@@ -367,19 +367,19 @@ impl<'a> Compiler<'a> {
     }
 
     fn statement(&mut self) {
-        if self.match_(TokenPrint) {
+        if self.match_(Print) {
             self.print_statement();
-        } else if self.match_(TokenAssert) {
+        } else if self.match_(Assert) {
             self.assert_statement();
-        } else if self.match_(TokenFor) {
+        } else if self.match_(For) {
             self.for_statement();
-        } else if self.match_(TokenIf) {
+        } else if self.match_(If) {
             self.if_statement();
-        } else if self.match_(TokenReturn) {
+        } else if self.match_(Return) {
             self.return_statement();
-        } else if self.match_(TokenWhile) {
+        } else if self.match_(While) {
             self.while_statement();
-        } else if self.match_(TokenLeftBrace) {
+        } else if self.match_(LeftBrace) {
             self.begin_scope();
             self.block();
             self.end_scope();
@@ -390,7 +390,7 @@ impl<'a> Compiler<'a> {
 
     fn print_statement(&mut self) {
         self.expression();
-        self.consume(TokenSemicolon, "Expect ';' after expression.");
+        self.consume(Semicolon, "Expect ';' after expression.");
         self.emit_bytes(OpPrint as u8, OpPop as u8);
     }
 
@@ -416,7 +416,7 @@ impl<'a> Compiler<'a> {
 
     fn epxression_statement(&mut self) {
         self.expression();
-        self.consume(TokenSemicolon, "Expect ';' after expression.");
+        self.consume(Semicolon, "Expect ';' after expression.");
         self.emit_byte(OpPop as u8);
     }
 
@@ -451,7 +451,7 @@ impl<'a> Compiler<'a> {
             }
         }
 
-        if (can_assign) && self.match_(TokenEqual) {
+        if (can_assign) && self.match_(Equal) {
             self.error("Invalid assignment target.");
         }
     }
@@ -466,71 +466,71 @@ impl<'a> Compiler<'a> {
 
     fn get_rule(&self, type_: &TokenType) -> ParseRule {
         match type_ {
-            TokenAnd => todo!(),
-            TokenAssert => todo!(),
-            TokenBang => todo!(),
-            TokenBangEqual => todo!(),
-            TokenClass => todo!(),
-            TokenComma => todo!(),
-            TokenDot => todo!(),
-            TokenElse => todo!(),
-            TokenEof => ParseRule {
+            And => todo!(),
+            Assert => todo!(),
+            Bang => todo!(),
+            BangEqual => todo!(),
+            Class => todo!(),
+            Comma => todo!(),
+            Dot => todo!(),
+            Else => todo!(),
+            Eof => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
                 precedence: PrecNone,
             },
-            TokenEqual => todo!(),
-            TokenEqualEqual => todo!(),
-            TokenError => todo!(),
-            TokenFalse => todo!(),
-            TokenFor => todo!(),
-            TokenFun => todo!(),
-            TokenGreater => todo!(),
-            TokenGreaterEqual => todo!(),
-            TokenIdentifier => todo!(),
-            TokenIf => todo!(),
-            TokenLeftBrace => todo!(),
-            TokenLeftParen => todo!(),
-            TokenLess => todo!(),
-            TokenLessEqual => todo!(),
-            TokenMinus => ParseRule {
+            Equal => todo!(),
+            EqualEqual => todo!(),
+            Error => todo!(),
+            False => todo!(),
+            For => todo!(),
+            Fun => todo!(),
+            Greater => todo!(),
+            GreaterEqual => todo!(),
+            Identifier => todo!(),
+            If => todo!(),
+            LeftBrace => todo!(),
+            LeftParen => todo!(),
+            Less => todo!(),
+            LessEqual => todo!(),
+            Minus => ParseRule {
                 prefix_rule: Some(unary),
                 infix_rule: Some(binary),
                 precedence: PrecTerm,
             },
-            TokenNil => todo!(),
+            Nil => todo!(),
             TokenNumber => ParseRule {
                 prefix_rule: Some(number),
                 infix_rule: None,
                 precedence: PrecAssignment,
             },
-            TokenOr => todo!(),
-            TokenPlus => ParseRule {
+            Or => todo!(),
+            Plus => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
                 precedence: PrecTerm,
             },
-            TokenPrint => todo!(),
-            TokenReturn => todo!(),
-            TokenRightBrace => todo!(),
-            TokenRightParen => todo!(),
-            TokenSemicolon => ParseRule {
+            Print => todo!(),
+            Return => todo!(),
+            RightBrace => todo!(),
+            RightParen => todo!(),
+            Semicolon => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
                 precedence: PrecNone,
             },
-            TokenSlash => todo!(),
-            TokenStar => todo!(),
+            Slash => todo!(),
+            Star => todo!(),
             TokenString => ParseRule {
                 prefix_rule: Some(string),
                 infix_rule: None,
                 precedence: PrecAssignment,
             },
-            TokenSuper => todo!(),
-            TokenThis => todo!(),
-            TokenTrue => todo!(),
-            TokenVar => todo!(),
-            TokenWhile => todo!(),
+            Super => todo!(),
+            This => todo!(),
+            True => todo!(),
+            Var => todo!(),
+            While => todo!(),
         }
     }
 
@@ -574,7 +574,7 @@ impl<'a> Compiler<'a> {
         match DEBUG_PRINT_CODE {
             DebugOutput::Table => self.function().disassemble_chunk(),
             DebugOutput::GraphViz => self.function().graph_output_chunk(),
-            DebugOutput::None => ()
+            DebugOutput::None => (),
         }
 
         if self.scanner.error_chain.had_error() {
@@ -589,7 +589,10 @@ impl<'a> Compiler<'a> {
     }
 
     fn function(&mut self) -> &mut Function {
-        self.vm.memory.retrieve_mut(&self.function).as_mut_function()
+        self.vm
+            .memory
+            .retrieve_mut(&self.function)
+            .as_mut_function()
     }
 }
 
@@ -671,18 +674,18 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
     this.expression_with_precedence(prec);
 
     match token {
-        TokenAnd => todo!(),
-        TokenBangEqual => todo!(),
-        TokenEqualEqual => todo!(),
-        TokenGreater => todo!(),
-        TokenGreaterEqual => todo!(),
-        TokenLess => todo!(),
-        TokenLessEqual => todo!(),
-        TokenMinus => this.emit_byte(OpSubtract as u8),
-        TokenOr => todo!(),
-        TokenPlus => this.emit_byte(OpAdd as u8),
-        TokenSlash => todo!(),
-        TokenStar => todo!(),
+        And => todo!(),
+        BangEqual => todo!(),
+        EqualEqual => todo!(),
+        Greater => todo!(),
+        GreaterEqual => todo!(),
+        Less => todo!(),
+        LessEqual => todo!(),
+        Minus => this.emit_byte(OpSubtract as u8),
+        Or => todo!(),
+        Plus => this.emit_byte(OpAdd as u8),
+        Slash => todo!(),
+        Star => todo!(),
         _ => this.error_at_current("Impossible binary operator. (this is an interpreter bug)"),
     }
 }
@@ -697,8 +700,8 @@ fn unary(this: &mut Compiler, _can_assign: bool) {
     this.expression_with_precedence(prec);
 
     match token {
-        TokenBang => this.emit_byte(OpNot as u8),
-        TokenMinus => this.emit_byte(OpNegate as u8),
+        Bang => this.emit_byte(OpNot as u8),
+        Minus => this.emit_byte(OpNegate as u8),
         _ => this.error_at_current("Impossible unary operator. (this is an interpreter bug)"),
     }
 }
@@ -729,12 +732,9 @@ impl ConvertNumber for String {
 impl Function {
     fn disassemble_chunk(&self) {
         eprintln!("digraph chunk {{");
-        let mut instruction = 0;
-        for op in &self.chunk {
+        for (instruction, op) in self.chunk.iter().enumerate() {
             let op = op.into();
-            self.print_instruction(instruction, &op);
-
-            instruction += 1;
+            self.print_instruction(instruction as u32, &op);
         }
         eprintln!("}}");
         todo!("output memory and code as graphviz")
@@ -745,16 +745,14 @@ impl Function {
         let mut i = 0;
 
         while i < self.chunk.len() - 1 {
-            let op = self.chunk.get(i)
-                .unwrap()
-                .into();
+            let op = self.chunk.get(i).unwrap().into();
 
             match op {
                 OpDefineGlobal => self.graph_instruction(i, &op),
                 OpConstant => {
                     self.graph_binary(i, &op);
                     i += 1;
-                },
+                }
                 OpPop => self.graph_instruction(i, &op),
                 OpPrint => self.graph_instruction(i, &op),
                 OpNil => self.graph_instruction(i, &op),
@@ -779,19 +777,15 @@ impl Function {
 
     fn graph_binary(&self, i: usize, op: &Op) {
         // todo: graph the constant itself, not the pointer
-        let c = self.chunk.get(i+1).unwrap();
-        let next: Op = self.chunk.get(i+2)
-            .unwrap()
-            .into();
-        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i+1, c);
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i+2, next);
+        let c = self.chunk.get(i + 1).unwrap();
+        let next: Op = self.chunk.get(i + 2).unwrap().into();
+        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
+        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
     }
 
     fn graph_instruction(&self, i: usize, op: &Op) {
-        let next: Op = self.chunk.get(i+1)
-            .unwrap()
-            .into();
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i+1, next);
+        let next: Op = self.chunk.get(i + 1).unwrap().into();
+        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 1, next);
     }
 }
 

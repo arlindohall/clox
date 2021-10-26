@@ -2,21 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use crate::compiler::Function;
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct MemoryEntry {
     location: usize,
 }
 
 pub fn mem(location: usize) -> MemoryEntry {
-    MemoryEntry {
-        location
-    }
-}
-
-impl PartialEq for MemoryEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.location == other.location
-    }
+    MemoryEntry { location }
 }
 
 impl Eq for MemoryEntry {}
@@ -40,15 +32,17 @@ pub struct Memory {
     strings: HashSet<String>,
 }
 
-impl Memory {
-    pub fn new() -> Memory {
+impl Default for Memory {
+    fn default() -> Memory {
         Memory {
             count: 0,
             memory: HashMap::new(),
             strings: HashSet::new(),
         }
     }
+}
 
+impl Memory {
     pub fn allocate(&mut self, object: Object) -> MemoryEntry {
         let m_loc = mem(self.count);
         self.memory.insert(m_loc.clone(), object);
@@ -58,11 +52,11 @@ impl Memory {
     }
 
     pub fn retrieve_mut(&mut self, index: &MemoryEntry) -> &mut Object {
-        self.memory.get_mut(&index).unwrap()
+        self.memory.get_mut(index).unwrap()
     }
 
     pub fn retrieve(&self, index: &MemoryEntry) -> &Object {
-        self.memory.get(&index).unwrap()
+        self.memory.get(index).unwrap()
     }
 }
 impl Object {

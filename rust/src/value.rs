@@ -21,8 +21,7 @@ impl Value {
 
     pub fn as_string<'a>(&self, mem: &'a Memory) -> &'a String {
         if let Value::Object(ptr) = self {
-            mem.retrieve(ptr)
-                .as_string()
+            mem.retrieve(ptr).as_string()
         } else {
             panic!("Internall lox error (expected string type), this is a bug.")
         }

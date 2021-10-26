@@ -97,11 +97,10 @@ impl From<&u8> for Op {
             7 => OpNot,
             8 => OpReturn,
             9 => OpSubtract,
-            _ => panic!("Impossible op")
+            _ => panic!("Impossible op"),
         }
     }
 }
-
 
 /// I just did this because Clippy told me to.
 impl Default for VM {
@@ -114,7 +113,7 @@ impl Default for VM {
     fn default() -> Self {
         VM {
             stack: Vec::new(),
-            memory: Memory::new(),
+            memory: Memory::default(),
             ip: 0,
             frames: Vec::new(),
         }
@@ -168,7 +167,7 @@ impl VM {
 
     pub fn run(&mut self) {
         loop {
-            let frame = self.frames.get(self.frames.len() - 1).unwrap();
+            let frame = self.frames.last().unwrap();
             let op = self.closure(frame).chunk.get(frame.ip).unwrap().into();
 
             match op {
@@ -177,7 +176,8 @@ impl VM {
                     let v2 = self.stack.pop().unwrap();
 
                     if v1.is_string() && v2.is_string() {
-                        let string = self.concatenate(v1.as_string(&self.memory), v2.as_string(&self.memory));
+                        let string = self
+                            .concatenate(v1.as_string(&self.memory), v2.as_string(&self.memory));
                         self.stack.push(string)
                     } else if v1.is_number() && v2.is_number() {
                         let number = Number(v1.as_number() + v2.as_number());
@@ -192,7 +192,7 @@ impl VM {
                     self.stack.pop();
                 }
                 OpPrint => {
-                    let val = self.stack.get(self.stack.len() - 1).unwrap();
+                    let val = self.stack.last().unwrap();
 
                     println!("{:?}", val);
                 }
@@ -234,40 +234,36 @@ impl Display for LoxErrorChain {
 
 impl Display for LoxErrorSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "[line={}] {}", self.line, self.message)
     }
 }
 
-impl LoxErrorSpec {
-    fn to_string(&self) -> String {
-        format!("[line={}] {}", self.line, self.message)
-    }
-}
-
-impl LoxError {
-    fn to_string(&self) -> String {
+impl Display for LoxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoxError::ScanError(s) => format!("ScanError: {}", s.to_string()),
-            LoxError::ParseError(p) => format!("ParseError: {}", p.to_string()),
-            LoxError::RuntimeError(r) => format!("RuntimeError: {}", r.to_string()),
+            LoxError::ScanError(s) => write!(f, "ScanError: {}", s),
+            LoxError::ParseError(p) => write!(f, "ParseError: {}", p),
+            LoxError::RuntimeError(r) => write!(f, "RuntimeError: {}", r),
         }
     }
 }
 
-impl LoxErrorChain {
-    pub fn new() -> LoxErrorChain {
+impl Default for LoxErrorChain {
+    fn default() -> LoxErrorChain {
         LoxErrorChain { errors: Vec::new() }
     }
+}
 
+impl LoxErrorChain {
     pub fn register(&mut self, error: LoxError) {
         self.errors.push(error)
     }
 
     pub(crate) fn had_error(&self) -> bool {
-        self.errors.len() > 0
+        !self.errors.is_empty()
     }
 
-    pub(crate) fn print_all(&self) -> () {
+    pub(crate) fn print_all(&self) {
         println!(
             "{}",
             self.errors
@@ -279,7 +275,7 @@ impl LoxErrorChain {
     }
 
     pub fn errors(&mut self) -> Vec<LoxError> {
-        std::mem::replace(&mut self.errors, Vec::new())
+        std::mem::take(&mut self.errors)
     }
 }
 
