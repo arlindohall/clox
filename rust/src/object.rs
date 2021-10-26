@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::compiler::Function;
 
@@ -62,9 +62,7 @@ impl Memory {
     fn intern(&mut self, string: Box<String>) -> MemoryEntry {
         match self.strings.get(&string) {
             Some(m_loc) => m_loc.clone(),
-            None => {
-                self.insert(Object::ObjString(string))
-            }
+            None => self.insert(Object::ObjString(string)),
         }
     }
 
@@ -76,6 +74,22 @@ impl Memory {
         m_loc
     }
 }
+
+impl Display for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Object::_ObjBoundMethod() => todo!("display a bound method"),
+            Object::_ObjClass() => todo!("display a class"),
+            Object::_ObjClosure() => todo!("display a closure"),
+            Object::ObjFunction(func) => write!(f, "fn<{}>", func.name),
+            Object::_ObjInstance() => todo!("display an instance"),
+            Object::_ObjNative() => todo!("display a native function"),
+            Object::ObjString(s) => write!(f, "{}", s),
+            Object::_ObjUpvalue() => todo!("display an upvalue"),
+        }
+    }
+}
+
 impl Object {
     pub fn as_mut_function(&mut self) -> &mut Function {
         match self {

@@ -7,10 +7,10 @@ use crate::object::{Memory, MemoryEntry};
 /// created at compile time (esp. functions and constants).
 /// The main use, though, is pushing and poping values to the
 /// stack.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Number(f64),
-    _Boolean(bool),
+    Boolean(bool),
     Object(MemoryEntry),
 }
 

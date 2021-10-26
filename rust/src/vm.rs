@@ -167,8 +167,7 @@ impl VM {
 
     pub fn run(&mut self) {
         loop {
-            let frame = self.frames.last().unwrap();
-            let op = self.closure(frame).chunk.get(frame.ip).unwrap().into();
+            let op = self.read_byte().into();
 
             match op {
                 OpAdd => {
@@ -186,7 +185,10 @@ impl VM {
                         self.runtime_error("Operands must be two numbers or two strings.")
                     }
                 }
-                OpConstant => todo!("push a constant to the stack"),
+                OpConstant => {
+                    let constant = self.read_constant().clone();
+                    self.stack.push(constant);
+                }
                 OpDefineGlobal => todo!(),
                 OpPop => {
                     self.stack.pop();
@@ -194,15 +196,28 @@ impl VM {
                 OpPrint => {
                     let val = self.stack.last().unwrap();
 
-                    println!("{:?}", val);
+                    match val {
+                        Number(n) => println!("{}", n),
+                        Boolean(b) => println!("{}", b),
+                        Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
+                    }
                 }
                 OpNil => todo!(),
                 OpNegate => todo!(),
                 OpNot => todo!(),
-                OpReturn => todo!(),
+                OpReturn => {
+                    // todo: return from function, for now no-op
+                    return;
+                }
                 OpSubtract => todo!(),
             }
         }
+    }
+
+    pub fn read_constant(&mut self) -> &Value {
+        let index = *self.read_byte() as usize;
+        let frame = self.frames.last().unwrap();
+        self.closure(frame).chunk.constants.get(index).unwrap()
     }
 
     fn closure(&self, frame: &CallFrame) -> &Function {
@@ -215,6 +230,12 @@ impl VM {
             str1,
             str2
         )
+    }
+
+    pub fn read_byte(&mut self) -> &u8 {
+        self.frames.last_mut().unwrap().ip += 1;
+        let frame = self.frames.last().unwrap();
+        self.closure(frame).chunk.code.get(frame.ip - 1).unwrap()
     }
 }
 

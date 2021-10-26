@@ -19,7 +19,7 @@ pub(crate) enum DebugOutput {
     GraphViz,
 }
 
-static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::GraphViz;
+static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::None;
 const UNINITIALIZED: isize = -1;
 
 /// Compiler used for a single function or script.
@@ -73,9 +73,15 @@ struct Parser {
 /// stored in a closure structure.
 #[derive(Debug)]
 pub struct Function {
-    pub(crate) chunk: Vec<u8>,
-    constants: Vec<Value>,
+    pub(crate) name: String,
+    pub(crate) chunk: Chunk,
     pub(crate) arity: usize,
+}
+
+#[derive(Debug)]
+pub(crate) struct Chunk {
+    pub(crate) code: Vec<u8>,
+    pub(crate) constants: Vec<Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -113,9 +119,12 @@ impl<'a> Compiler<'a> {
     /// is fine to use any time we need a new [Compiler]
     pub fn new(vm: &mut VM) -> Compiler {
         let entry_point = Function {
+            name: "".to_string(),
             arity: 0,
-            chunk: Vec::new(),
-            constants: Vec::new(),
+            chunk: Chunk {
+                code: Vec::new(),
+                constants: Vec::new(),
+            },
         };
         let function = vm.memory.allocate(ObjFunction(Box::new(entry_point)));
         Compiler {
@@ -297,7 +306,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_byte(&mut self, op: u8) {
-        self.function().chunk.push(op)
+        self.function().chunk.code.push(op)
     }
 
     fn emit_return(&mut self) {
@@ -540,11 +549,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
-        if self.function().constants.len() >= 256 {
+        if self.function().chunk.constants.len() >= 256 {
             todo!("error handling for over-full constant table")
         } else {
-            self.function().constants.push(value);
-            (self.function().constants.len() - 1) as u8
+            self.function().chunk.constants.push(value);
+            (self.function().chunk.constants.len() - 1) as u8
         }
     }
 
@@ -731,8 +740,9 @@ impl ConvertNumber for String {
 
 impl Function {
     fn disassemble_chunk(&self) {
+        // todo: disassemble constants as well
         eprintln!("digraph chunk {{");
-        for (instruction, op) in self.chunk.iter().enumerate() {
+        for (instruction, op) in self.chunk.code.iter().enumerate() {
             let op = op.into();
             self.print_instruction(instruction as u32, &op);
         }
@@ -744,8 +754,8 @@ impl Function {
         eprintln!("digraph chunk {{");
         let mut i = 0;
 
-        while i < self.chunk.len() - 1 {
-            let op = self.chunk.get(i).unwrap().into();
+        while i < self.chunk.code.len() - 1 {
+            let op = self.chunk.code.get(i).unwrap().into();
 
             match op {
                 OpDefineGlobal => self.graph_instruction(i, &op),
@@ -777,14 +787,14 @@ impl Function {
 
     fn graph_binary(&self, i: usize, op: &Op) {
         // todo: graph the constant itself, not the pointer
-        let c = self.chunk.get(i + 1).unwrap();
-        let next: Op = self.chunk.get(i + 2).unwrap().into();
+        let c = self.chunk.code.get(i + 1).unwrap();
+        let next: Op = self.chunk.code.get(i + 2).unwrap().into();
         eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
     }
 
     fn graph_instruction(&self, i: usize, op: &Op) {
-        let next: Op = self.chunk.get(i + 1).unwrap().into();
+        let next: Op = self.chunk.code.get(i + 1).unwrap().into();
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 1, next);
     }
 }
@@ -815,13 +825,13 @@ mod test {
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
-            bytecode.chunk,
+            bytecode.chunk.code,
             vec![OpNil as u8, OpDefineGlobal as u8, 0, OpReturn as u8]
         );
 
-        assert_eq!(1, bytecode.constants.len());
+        assert_eq!(1, bytecode.chunk.constants.len());
 
-        if let Object(ptr) = bytecode.constants.get(0).unwrap() {
+        if let Object(ptr) = bytecode.chunk.constants.get(0).unwrap() {
             if let ObjString(s) = vm.memory.retrieve(ptr) {
                 assert_eq!(**s, "x");
             } else {
@@ -838,7 +848,7 @@ mod test {
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
-            bytecode.chunk,
+            bytecode.chunk.code,
             vec![OpConstant as u8, 0, OpPop as u8, OpReturn as u8]
         );
     }
@@ -849,7 +859,7 @@ mod test {
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
-            bytecode.chunk,
+            bytecode.chunk.code,
             vec![
                 OpConstant as u8,
                 0,
@@ -866,7 +876,7 @@ mod test {
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
-            bytecode.chunk,
+            bytecode.chunk.code,
             vec![
                 OpConstant as u8,
                 0,
@@ -883,7 +893,7 @@ mod test {
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
-            bytecode.chunk,
+            bytecode.chunk.code,
             vec![
                 OpConstant as u8,
                 0,
@@ -902,7 +912,7 @@ mod test {
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
-            bytecode.chunk,
+            bytecode.chunk.code,
             vec![
                 OpConstant as u8,
                 0,
@@ -921,7 +931,7 @@ mod test {
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
-            bytecode.chunk,
+            bytecode.chunk.code,
             vec![
                 OpConstant as u8,
                 0,
