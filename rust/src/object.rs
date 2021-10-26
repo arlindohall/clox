@@ -1,8 +1,25 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::compiler::Function;
 
-pub type MemoryEntry = usize;
+#[derive(Clone, Debug, Hash)]
+pub struct MemoryEntry {
+    location: usize,
+}
+
+pub fn mem(location: usize) -> MemoryEntry {
+    MemoryEntry {
+        location
+    }
+}
+
+impl PartialEq for MemoryEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.location == other.location
+    }
+}
+
+impl Eq for MemoryEntry {}
 
 #[derive(Debug)]
 pub enum Object {
@@ -20,6 +37,7 @@ pub enum Object {
 pub struct Memory {
     count: usize,
     memory: HashMap<MemoryEntry, Object>,
+    strings: HashSet<String>,
 }
 
 impl Memory {
@@ -27,21 +45,23 @@ impl Memory {
         Memory {
             count: 0,
             memory: HashMap::new(),
+            strings: HashSet::new(),
         }
     }
 
     pub fn allocate(&mut self, object: Object) -> MemoryEntry {
-        self.memory.insert(self.count, object);
+        let m_loc = mem(self.count);
+        self.memory.insert(m_loc.clone(), object);
         self.count += 1;
 
-        self.count - 1
+        m_loc
     }
 
-    pub fn retrieve_mut(&mut self, index: MemoryEntry) -> &mut Object {
+    pub fn retrieve_mut(&mut self, index: &MemoryEntry) -> &mut Object {
         self.memory.get_mut(&index).unwrap()
     }
 
-    pub fn retrieve(&self, index: MemoryEntry) -> &Object {
+    pub fn retrieve(&self, index: &MemoryEntry) -> &Object {
         self.memory.get(&index).unwrap()
     }
 }
@@ -57,5 +77,9 @@ impl Object {
             Object::ObjFunction(f) => f,
             _ => panic!("Internal error: expected lox function type."),
         }
+    }
+
+    pub(crate) fn as_string(&self) -> &String {
+        todo!()
     }
 }

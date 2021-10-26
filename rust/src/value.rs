@@ -1,3 +1,5 @@
+use crate::object::{Memory, MemoryEntry};
+
 /// Internal Lox value representation
 ///
 /// This enum represents all the kinds of values that can
@@ -9,7 +11,7 @@
 pub enum Value {
     Number(f64),
     _Boolean(bool),
-    Object(usize),
+    Object(MemoryEntry),
 }
 
 impl Value {
@@ -17,8 +19,13 @@ impl Value {
         todo!("check if value is a string")
     }
 
-    pub fn as_string(&self) -> &String {
-        todo!("convert a value to a string")
+    pub fn as_string<'a>(&self, mem: &'a Memory) -> &'a String {
+        if let Value::Object(ptr) = self {
+            mem.retrieve(ptr)
+                .as_string()
+        } else {
+            panic!("Internall lox error (expected string type), this is a bug.")
+        }
     }
 
     pub fn is_number(&self) -> bool {

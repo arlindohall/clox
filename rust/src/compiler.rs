@@ -534,7 +534,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn copy_string(&mut self, start: usize, end: usize) -> usize {
+    fn copy_string(&mut self, start: usize, end: usize) -> MemoryEntry {
         let string = ObjString(self.scanner.copy_segment(start, end));
         self.vm.memory.allocate(string)
     }
@@ -589,7 +589,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn function(&mut self) -> &mut Function {
-        self.vm.memory.retrieve_mut(self.function).as_mut_function()
+        self.vm.memory.retrieve_mut(&self.function).as_mut_function()
     }
 }
 
@@ -818,7 +818,7 @@ mod test {
     #[test]
     fn test_compile_variable_declaration() {
         let (bytecode, vm) = compile_expression("var x;");
-        let bytecode = vm.memory.retrieve(bytecode).as_function();
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -828,7 +828,7 @@ mod test {
         assert_eq!(1, bytecode.constants.len());
 
         if let Object(ptr) = bytecode.constants.get(0).unwrap() {
-            if let ObjString(s) = vm.memory.retrieve(*ptr) {
+            if let ObjString(s) = vm.memory.retrieve(ptr) {
                 assert_eq!(s, "x");
             } else {
                 panic!("expected memory to contian string variable name")
@@ -841,7 +841,7 @@ mod test {
     #[test]
     fn test_compile_simple_integer_expression() {
         let (bytecode, vm) = compile_expression("1;");
-        let bytecode = vm.memory.retrieve(bytecode).as_function();
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -852,7 +852,7 @@ mod test {
     #[test]
     fn test_compile_print_expression() {
         let (bytecode, vm) = compile_expression("print 1;");
-        let bytecode = vm.memory.retrieve(bytecode).as_function();
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -869,7 +869,7 @@ mod test {
     #[test]
     fn test_compile_print_string() {
         let (bytecode, vm) = compile_expression("print \"hello\";");
-        let bytecode = vm.memory.retrieve(bytecode).as_function();
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -886,7 +886,7 @@ mod test {
     #[test]
     fn test_add_two_numbers() {
         let (bytecode, vm) = compile_expression("1+1;");
-        let bytecode = vm.memory.retrieve(bytecode).as_function();
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -905,7 +905,7 @@ mod test {
     #[test]
     fn test_subtract_two_numbers() {
         let (bytecode, vm) = compile_expression("1-1;");
-        let bytecode = vm.memory.retrieve(bytecode).as_function();
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,
@@ -924,7 +924,7 @@ mod test {
     #[test]
     fn test_negate_a_number() {
         let (bytecode, vm) = compile_expression("-1;");
-        let bytecode = vm.memory.retrieve(bytecode).as_function();
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
         assert_eq!(
             bytecode.chunk,

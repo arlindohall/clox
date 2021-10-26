@@ -134,7 +134,7 @@ impl VM {
 
         match function {
             Ok(func) => {
-                self.call(func, 0, 0);
+                self.call(&func, crate::object::mem(0), 0);
                 self.run();
             }
             Err(error) => println!("{}", error),
@@ -143,7 +143,7 @@ impl VM {
         self
     }
 
-    fn call(&mut self, closure: MemoryEntry, mem_entry: MemoryEntry, argc: usize) {
+    fn call(&mut self, closure: &MemoryEntry, mem_entry: MemoryEntry, argc: usize) {
         let closure = self.memory.retrieve_mut(closure).as_function();
         if closure.arity != argc {
             let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
@@ -177,7 +177,7 @@ impl VM {
                     let v2 = self.stack.pop().unwrap();
 
                     if v1.is_string() && v2.is_string() {
-                        let string = self.concatenate(v1.as_string(), v2.as_string());
+                        let string = self.concatenate(v1.as_string(&self.memory), v2.as_string(&self.memory));
                         self.stack.push(string)
                     } else if v1.is_number() && v2.is_number() {
                         let number = Number(v1.as_number() + v2.as_number());
@@ -206,7 +206,7 @@ impl VM {
     }
 
     fn closure(&self, frame: &CallFrame) -> &Function {
-        self.memory.retrieve(frame.ip).as_function()
+        self.memory.retrieve(&frame.closure).as_function()
     }
 
     pub fn concatenate(&self, str1: &str, str2: &str) -> Value {
