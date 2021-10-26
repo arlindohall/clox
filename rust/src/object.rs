@@ -18,10 +18,10 @@ pub enum Object {
     _ObjBoundMethod(),
     _ObjClass(),
     _ObjClosure(),
-    ObjFunction(Function),
+    ObjFunction(Box<Function>),
     _ObjInstance(),
     _ObjNative(),
-    ObjString(String),
+    ObjString(Box<String>),
     _ObjUpvalue(),
 }
 

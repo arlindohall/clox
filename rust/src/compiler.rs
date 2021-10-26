@@ -117,7 +117,7 @@ impl<'a> Compiler<'a> {
             chunk: Vec::new(),
             constants: Vec::new(),
         };
-        let function = vm.memory.allocate(ObjFunction(entry_point));
+        let function = vm.memory.allocate(ObjFunction(Box::new(entry_point)));
         Compiler {
             vm,
             function,
@@ -823,7 +823,7 @@ mod test {
 
         if let Object(ptr) = bytecode.constants.get(0).unwrap() {
             if let ObjString(s) = vm.memory.retrieve(ptr) {
-                assert_eq!(s, "x");
+                assert_eq!(**s, "x");
             } else {
                 panic!("expected memory to contian string variable name")
             }
