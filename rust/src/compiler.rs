@@ -7,7 +7,6 @@ use crate::scanner::TokenType::*;
 use crate::value::{Value, Value::*};
 use crate::vm::LoxError::*;
 use crate::vm::LoxErrorChain;
-use crate::vm::LoxErrorSpec;
 use crate::vm::Op;
 use crate::vm::Op::*;
 use crate::vm::VM;
@@ -81,6 +80,7 @@ pub struct Function {
 #[derive(Debug)]
 pub(crate) struct Chunk {
     pub(crate) code: Vec<u8>,
+    pub(crate) lines: Vec<usize>,
     pub(crate) constants: Vec<Value>,
 }
 
@@ -96,7 +96,7 @@ enum Precedence {
     _PrecFactor,
     _PrecUnary,
     _PrecCall,
-    _PrecPrimary,
+    PrecPrimary,
 }
 
 struct ParseRule {
@@ -123,6 +123,7 @@ impl<'a> Compiler<'a> {
             arity: 0,
             chunk: Chunk {
                 code: Vec::new(),
+                lines: Vec::new(),
                 constants: Vec::new(),
             },
         };
@@ -306,6 +307,8 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_byte(&mut self, op: u8) {
+        let line = self.parser.current.line;
+        self.function().chunk.lines.push(line);
         self.function().chunk.code.push(op)
     }
 
@@ -403,8 +406,10 @@ impl<'a> Compiler<'a> {
         self.emit_bytes(OpPrint as u8, OpPop as u8);
     }
 
-    fn assert_statement(&self) {
-        todo!("compile a single assertion")
+    fn assert_statement(&mut self) {
+        self.expression();
+        self.consume(Semicolon, "Expect ';' after assertion statement.");
+        self.emit_bytes(OpAssert as u8, OpPop as u8);
     }
 
     fn for_statement(&self) {
@@ -491,7 +496,11 @@ impl<'a> Compiler<'a> {
             Equal => todo!(),
             EqualEqual => todo!(),
             Error => todo!(),
-            False => todo!(),
+            False => ParseRule {
+                prefix_rule: Some(boolean),
+                infix_rule: None,
+                precedence: PrecPrimary,
+            },
             For => todo!(),
             Fun => todo!(),
             Greater => todo!(),
@@ -507,7 +516,7 @@ impl<'a> Compiler<'a> {
                 infix_rule: Some(binary),
                 precedence: PrecTerm,
             },
-            Nil => todo!(),
+            TokenNil => todo!(),
             TokenNumber => ParseRule {
                 prefix_rule: Some(number),
                 infix_rule: None,
@@ -537,7 +546,11 @@ impl<'a> Compiler<'a> {
             },
             Super => todo!(),
             This => todo!(),
-            True => todo!(),
+            True => ParseRule {
+                prefix_rule: Some(boolean),
+                infix_rule: None,
+                precedence: PrecPrimary,
+            },
             Var => todo!(),
             While => todo!(),
         }
@@ -559,18 +572,18 @@ impl<'a> Compiler<'a> {
 
     fn error_at_current(&mut self, message: &str) {
         let message = message.to_string();
-        self.error_chain.register(ParseError(LoxErrorSpec {
+        self.error_chain.register(ParseError {
             line: self.parser.current.line,
             message,
-        }))
+        })
     }
 
     fn error(&mut self, message: &str) {
         let message = message.to_string();
-        self.error_chain.register(ParseError(LoxErrorSpec {
+        self.error_chain.register(ParseError {
             line: self.parser.previous.line,
             message,
-        }))
+        })
     }
 
     fn synchronize(&mut self) {
@@ -618,26 +631,14 @@ impl Precedence {
             _PrecFactor,
             _PrecUnary,
             _PrecCall,
-            _PrecPrimary,
+            PrecPrimary,
         ]
     }
 }
 
 impl From<Precedence> for u8 {
     fn from(prec: Precedence) -> Self {
-        match prec {
-            PrecNone => 0,
-            PrecAssignment => 1,
-            _PrecOr => 2,
-            _PrecAnd => 3,
-            _PrecEquality => 4,
-            _PrecComparison => 5,
-            PrecTerm => 6,
-            _PrecFactor => 7,
-            _PrecUnary => 8,
-            _PrecCall => 9,
-            _PrecPrimary => 10,
-        }
+        prec as u8
     }
 }
 
@@ -725,6 +726,17 @@ fn string(this: &mut Compiler, _can_assign: bool) {
     this.emit_bytes(OpConstant as u8, index);
 }
 
+fn boolean(this: &mut Compiler, _can_assign: bool) {
+    let token = &this.parser.previous.type_;
+    let index = match token {
+        True => this.make_constant(Value::Boolean(true)),
+        False => this.make_constant(Value::Boolean(false)),
+        _ => panic!("Internal error: cannot make boolean (this is a bug)."),
+    };
+
+    this.emit_bytes(OpConstant as u8, index);
+}
+
 trait ConvertNumber {
     fn convert(&self) -> f64;
 }
@@ -758,16 +770,17 @@ impl Function {
             let op = self.chunk.code.get(i).unwrap().into();
 
             match op {
-                OpDefineGlobal => self.graph_instruction(i, &op),
+                OpAdd => todo!("visualize binary add operation"),
+                OpAssert => self.graph_instruction(i, &op),
                 OpConstant => {
                     self.graph_binary(i, &op);
                     i += 1;
                 }
+                OpDefineGlobal => self.graph_instruction(i, &op),
+                OpNil => self.graph_instruction(i, &op),
                 OpPop => self.graph_instruction(i, &op),
                 OpPrint => self.graph_instruction(i, &op),
-                OpNil => self.graph_instruction(i, &op),
                 OpReturn => self.graph_instruction(i, &op),
-                OpAdd => todo!("visualize binary add operation"),
                 OpNegate => todo!("visualize binary negate operation"),
                 OpNot => {
                     self.graph_binary(i, &op);
@@ -952,14 +965,8 @@ mod test {
         let expr_err = errors.pop().unwrap();
         let semi_err = errors.pop().unwrap();
 
-        assert!(match &expr_err {
-            ParseError(_) => true,
-            _ => false,
-        });
-        assert!(match &semi_err {
-            ParseError(_) => true,
-            _ => false,
-        });
+        assert!(matches!(&expr_err, ParseError { .. }));
+        assert!(matches!(&semi_err, ParseError { .. }));
     }
 
     #[test]
@@ -968,9 +975,6 @@ mod test {
         let mut errors = err.errors();
 
         assert_eq!(1, errors.len());
-        assert!(match errors.pop().unwrap() {
-            ScanError(_) => true,
-            _ => false,
-        });
+        assert!(matches!(errors.pop().unwrap(), ScanError { .. }));
     }
 }

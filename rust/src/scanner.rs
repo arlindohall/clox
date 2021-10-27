@@ -2,7 +2,6 @@ use TokenType::*;
 
 use crate::vm::LoxError::*;
 use crate::vm::LoxErrorChain;
-use crate::vm::LoxErrorSpec;
 
 /// The type of token that was scanned.
 ///
@@ -35,7 +34,7 @@ pub enum TokenType {
     Less,
     LessEqual,
     Minus,
-    Nil,
+    TokenNil,
     TokenNumber,
     Or,
     Plus,
@@ -71,7 +70,7 @@ pub struct Token {
 impl Default for Token {
     fn default() -> Self {
         Token {
-            type_: Nil,
+            type_: TokenNil,
             start: 0,
             length: 0,
             line: 0,
@@ -246,7 +245,7 @@ impl Scanner {
                 }
             }
             'i' => self.check_keyword(1, "f", If),
-            'n' => self.check_keyword(1, "il", Nil),
+            'n' => self.check_keyword(1, "il", TokenNil),
             'o' => self.check_keyword(1, "r", Or),
             'p' => self.check_keyword(1, "rint", Print),
             'r' => self.check_keyword(1, "eturn", Return),
@@ -439,10 +438,10 @@ impl Scanner {
 
     fn error_token(&mut self, message: &'static str) -> Token {
         let message = message.to_string();
-        self.error_chain.register(ScanError(LoxErrorSpec {
+        self.error_chain.register(ScanError {
             line: self.line,
             message,
-        }));
+        });
 
         self.make_token(Error)
     }

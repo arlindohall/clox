@@ -34,6 +34,8 @@ pub struct VM {
 
     frames: Vec<CallFrame>,
     ip: usize,
+
+    error_chain: LoxErrorChain,
 }
 
 #[derive(Debug)]
@@ -44,16 +46,10 @@ struct CallFrame {
 }
 
 #[derive(Debug)]
-pub struct LoxErrorSpec {
-    pub line: usize,
-    pub message: String,
-}
-
-#[derive(Debug)]
 pub enum LoxError {
-    ScanError(LoxErrorSpec),
-    ParseError(LoxErrorSpec),
-    RuntimeError(LoxErrorSpec),
+    ScanError { line: usize, message: String },
+    ParseError { line: usize, message: String },
+    RuntimeError { line: usize, message: String },
 }
 
 #[derive(Debug)]
@@ -64,6 +60,7 @@ pub struct LoxErrorChain {
 #[derive(Clone, Debug)]
 #[repr(u8)]
 pub enum Op {
+    OpAssert,
     OpAdd,
     OpConstant,
     OpDefineGlobal,
@@ -86,19 +83,32 @@ impl From<&Op> for u8 {
 
 impl From<&u8> for Op {
     fn from(op: &u8) -> Op {
-        match op {
-            0 => OpAdd,
-            1 => OpConstant,
-            2 => OpDefineGlobal,
-            3 => OpPop,
-            4 => OpPrint,
-            5 => OpNil,
-            6 => OpNegate,
-            7 => OpNot,
-            8 => OpReturn,
-            9 => OpSubtract,
-            _ => panic!("Impossible op"),
+        for v in &Op::values() {
+            let val: u8 = v.into();
+            if val == *op {
+                return v.clone();
+            }
         }
+
+        panic!("Impossible op {}", op)
+    }
+}
+
+impl Op {
+    pub(crate) fn values() -> Vec<Op> {
+        vec![
+            OpAssert,
+            OpAdd,
+            OpConstant,
+            OpDefineGlobal,
+            OpPop,
+            OpPrint,
+            OpNil,
+            OpNegate,
+            OpNot,
+            OpReturn,
+            OpSubtract,
+        ]
     }
 }
 
@@ -116,6 +126,7 @@ impl Default for VM {
             memory: Memory::default(),
             ip: 0,
             frames: Vec::new(),
+            error_chain: LoxErrorChain::default(),
         }
     }
 }
@@ -161,8 +172,14 @@ impl VM {
         });
     }
 
-    fn runtime_error(&self, message: &str) {
-        todo!("emit runtime failure for: {}", message)
+    fn runtime_error(&mut self, message: &str) {
+        let message = message.to_string();
+
+        self.error_chain.register(LoxError::RuntimeError {
+            // todo: track line numbers with bytecode
+            message,
+            line: self.line_number(),
+        })
     }
 
     pub fn run(&mut self) {
@@ -170,6 +187,19 @@ impl VM {
             let op = self.read_byte().into();
 
             match op {
+                OpAssert => {
+                    let val = self.stack.last().unwrap();
+
+                    match val {
+                        Boolean(false) | Nil => {
+                            self.runtime_error("Failed assertion");
+                            println!("{}", self.error_chain);
+                            // todo: should this exit or just revert to top level?
+                            std::process::exit(3);
+                        }
+                        _ => (),
+                    }
+                }
                 OpAdd => {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
@@ -197,6 +227,7 @@ impl VM {
                     let val = self.stack.last().unwrap();
 
                     match val {
+                        Nil => println!("nil"),
                         Number(n) => println!("{}", n),
                         Boolean(b) => println!("{}", b),
                         Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
@@ -232,6 +263,15 @@ impl VM {
         )
     }
 
+    pub fn line_number(&self) -> usize {
+        let frame = self.frames.last().unwrap();
+        *self.closure(frame)
+            .chunk
+            .lines
+            .get(frame.ip - 1)
+            .unwrap()
+    }
+
     pub fn read_byte(&mut self) -> &u8 {
         self.frames.last_mut().unwrap().ip += 1;
         let frame = self.frames.last().unwrap();
@@ -253,18 +293,20 @@ impl Display for LoxErrorChain {
     }
 }
 
-impl Display for LoxErrorSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[line={}] {}", self.line, self.message)
-    }
-}
-
 impl Display for LoxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let err_type = match self {
+            LoxError::ScanError { .. } => "ScanError",
+            LoxError::ParseError { .. } => "ParseError",
+            LoxError::RuntimeError { .. } => "RuntimeError",
+        };
+
         match self {
-            LoxError::ScanError(s) => write!(f, "ScanError: {}", s),
-            LoxError::ParseError(p) => write!(f, "ParseError: {}", p),
-            LoxError::RuntimeError(r) => write!(f, "RuntimeError: {}", r),
+            LoxError::RuntimeError { message, line }
+            | LoxError::ParseError { message, line }
+            | LoxError::ScanError { message, line } => {
+                write!(f, "[line={}] {}: {}", line, err_type, message)
+            }
         }
     }
 }
@@ -300,7 +342,6 @@ impl LoxErrorChain {
     }
 }
 
-impl Error for LoxErrorSpec {}
 impl Error for LoxErrorChain {}
 
 #[cfg(test)]
@@ -310,5 +351,10 @@ mod test {
     #[test]
     fn test_run_hello_world_function() {
         VM::default().interpret("print \"Hello, world!\";");
+    }
+
+    #[test]
+    fn test_assert_at_runtime() {
+        VM::default().interpret("assert true;");
     }
 }

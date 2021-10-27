@@ -12,6 +12,7 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     Object(MemoryEntry),
+    Nil,
 }
 
 impl Value {
