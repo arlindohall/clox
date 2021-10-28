@@ -62,9 +62,16 @@ pub struct LoxErrorChain {
 pub enum Op {
     OpAssert,
     OpAdd,
+    OpAnd,
     OpConstant,
     OpDefineGlobal,
+    OpDivide,
+    OpEqual,
+    OpGreater,
+    OpGreaterEqual,
+    OpOr,
     OpPop,
+    OpMultiply,
     OpPrint,
     OpNil,
     OpNegate,
@@ -233,14 +240,50 @@ impl VM {
                         Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
                     }
                 }
-                OpNil => todo!(),
-                OpNegate => todo!(),
-                OpNot => todo!(),
+                OpNil => {
+                    self.stack.push(Nil)
+                }
+                OpNegate => {
+                    let val = self.stack.pop().unwrap();
+
+                    match val {
+                        Number(n) => self.stack.push(Number(-n)),
+                        _ => self.runtime_error("Cannot negate non-number."),
+                    }
+                }
+                OpNot => {
+                    let val = self.stack.pop().unwrap();
+
+                    let opposite = matches!(val, Nil | Boolean(false));
+                    self.stack.push(Boolean(opposite))
+                }
                 OpReturn => {
                     // todo: return from function, for now no-op
                     return;
                 }
-                OpSubtract => todo!(),
+                OpSubtract => {
+                    // Popped in reverse order they were pushed, expecting a-b
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+
+                    if let (Number(a), Number(b)) = (a, b) {
+                        self.stack.push(Number(a-b))
+                    } else {
+                        self.runtime_error("Cannot subtract non-numbers")
+                    }
+                }
+                OpAnd => {
+                    let v1 = self.stack.pop().unwrap().as_boolean();
+                    let v2 = self.stack.pop().unwrap().as_boolean();
+
+                    self.stack.push(Boolean(v1 && v2))
+                },
+                OpEqual => todo!("compare two values for equality"),
+                OpGreater => todo!("compare if value a is greater than value b"),
+                OpGreaterEqual => todo!("compare if value a is greater or equal value b"),
+                OpOr => todo!("logical or of two arguments"),
+                OpMultiply => todo!("multiply two numbers"),
+                OpDivide => todo!("divide two numbers"),
             }
         }
     }

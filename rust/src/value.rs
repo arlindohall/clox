@@ -35,4 +35,8 @@ impl Value {
     pub fn as_number(&self) -> f64 {
         todo!("convert a value to a number")
     }
+
+    pub fn as_boolean(&self) -> bool {
+        !matches!(self, Value::Nil | Value::Boolean(false))
+    }
 }

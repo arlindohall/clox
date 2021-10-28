@@ -18,7 +18,7 @@ pub(crate) enum DebugOutput {
     GraphViz,
 }
 
-static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::None;
+static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::GraphViz;
 const UNINITIALIZED: isize = -1;
 
 /// Compiler used for a single function or script.
@@ -684,18 +684,18 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
     this.expression_with_precedence(prec);
 
     match token {
-        And => todo!(),
-        BangEqual => todo!(),
-        EqualEqual => todo!(),
-        Greater => todo!(),
-        GreaterEqual => todo!(),
-        Less => todo!(),
-        LessEqual => todo!(),
+        And => this.emit_byte(OpAnd as u8),
+        BangEqual => this.emit_bytes(OpEqual as u8, OpNot as u8),
+        EqualEqual => this.emit_byte(OpEqual as u8),
+        Greater => this.emit_byte(OpGreater as u8),
+        GreaterEqual => this.emit_byte(OpGreaterEqual as u8),
+        Less => this.emit_bytes(OpGreaterEqual as u8, OpNot as u8),
+        LessEqual => this.emit_bytes(OpGreater as u8, OpNot as u8),
         Minus => this.emit_byte(OpSubtract as u8),
-        Or => todo!(),
+        Or => this.emit_byte(OpOr as u8),
         Plus => this.emit_byte(OpAdd as u8),
-        Slash => todo!(),
-        Star => todo!(),
+        Slash => this.emit_byte(OpDivide as u8),
+        Star => this.emit_byte(OpMultiply as u8),
         _ => this.error_at_current("Impossible binary operator. (this is an interpreter bug)"),
     }
 }
@@ -769,27 +769,26 @@ impl Function {
         while i < self.chunk.code.len() - 1 {
             let op = self.chunk.code.get(i).unwrap().into();
 
-            match op {
-                OpAdd => todo!("visualize binary add operation"),
+            i = match op {
+                OpAdd => self.graph_binary(i, &op),
                 OpAssert => self.graph_instruction(i, &op),
-                OpConstant => {
-                    self.graph_binary(i, &op);
-                    i += 1;
-                }
+                OpConstant => self.graph_unary(i, &op),
                 OpDefineGlobal => self.graph_instruction(i, &op),
                 OpNil => self.graph_instruction(i, &op),
                 OpPop => self.graph_instruction(i, &op),
                 OpPrint => self.graph_instruction(i, &op),
                 OpReturn => self.graph_instruction(i, &op),
-                OpNegate => todo!("visualize binary negate operation"),
-                OpNot => {
-                    self.graph_binary(i, &op);
-                    i += 1;
-                }
-                OpSubtract => todo!(),
+                OpNegate => self.graph_binary(i, &op),
+                OpNot => self.graph_unary(i, &op),
+                OpSubtract => self.graph_binary(i, &op),
+                OpAnd => self.graph_binary(i, &op),
+                OpDivide => self.graph_binary(i, &op),
+                OpEqual => self.graph_binary(i, &op),
+                OpGreater => self.graph_binary(i, &op),
+                OpGreaterEqual => self.graph_binary(i, &op),
+                OpOr => self.graph_binary(i, &op),
+                OpMultiply => self.graph_binary(i, &op),
             }
-
-            i += 1;
         }
         eprintln!("}}");
     }
@@ -798,17 +797,34 @@ impl Function {
         eprintln!("{}{:?};", instruction, op);
     }
 
-    fn graph_binary(&self, i: usize, op: &Op) {
+    fn graph_unary(&self, i: usize, op: &Op) -> usize {
         // todo: graph the constant itself, not the pointer
         let c = self.chunk.code.get(i + 1).unwrap();
         let next: Op = self.chunk.code.get(i + 2).unwrap().into();
         eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
+
+        i + 2
     }
 
-    fn graph_instruction(&self, i: usize, op: &Op) {
+    fn graph_binary(&self, i: usize, op: &Op) -> usize {
+        // todo: graph the values instead of the pointer
+        let v1 = self.chunk.code.get(i + 1).unwrap();
+        let v2 = self.chunk.code.get(i + 2).unwrap();
+        let next: Op = self.chunk.code.get(i + 3).unwrap().into();
+
+        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, v1);
+        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, v2);
+        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 3, next);
+
+        i + 3
+    }
+
+    fn graph_instruction(&self, i: usize, op: &Op) -> usize {
         let next: Op = self.chunk.code.get(i + 1).unwrap().into();
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 1, next);
+
+        i + 1
     }
 }
 
