@@ -239,9 +239,7 @@ impl VM {
                         Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
                     }
                 }
-                OpNil => {
-                    self.stack.push(Nil)
-                }
+                OpNil => self.stack.push(Nil),
                 OpNegate => {
                     let val = self.stack.pop().unwrap();
 
@@ -266,7 +264,7 @@ impl VM {
                     let a = self.stack.pop().unwrap();
 
                     if let (Number(a), Number(b)) = (a, b) {
-                        self.stack.push(Number(a-b))
+                        self.stack.push(Number(a - b))
                     } else {
                         self.runtime_error("Cannot subtract non-numbers")
                     }
@@ -276,7 +274,7 @@ impl VM {
                     let v2 = self.stack.pop().unwrap().as_boolean();
 
                     self.stack.push(Boolean(v1 && v2))
-                },
+                }
                 OpEqual => todo!("compare two values for equality"),
                 OpGreater => todo!("compare if value a is greater than value b"),
                 OpGreaterEqual => todo!("compare if value a is greater or equal value b"),
@@ -307,11 +305,7 @@ impl VM {
 
     pub fn line_number(&self) -> usize {
         let frame = self.frames.last().unwrap();
-        *self.closure(frame)
-            .chunk
-            .lines
-            .get(frame.ip - 1)
-            .unwrap()
+        *self.closure(frame).chunk.lines.get(frame.ip - 1).unwrap()
     }
 
     pub fn read_byte(&mut self) -> &u8 {
@@ -390,13 +384,17 @@ impl Error for LoxErrorChain {}
 mod test {
     use super::*;
 
-    #[test]
-    fn test_run_hello_world_function() {
-        VM::default().interpret("print \"Hello, world!\";");
+    fn run(statement: &str) {
+        VM::default().interpret(statement);
     }
 
     #[test]
-    fn test_assert_at_runtime() {
-        VM::default().interpret("assert true;");
+    fn run_hello_world_function() {
+        run("print \"Hello, world!\";");
+    }
+
+    #[test]
+    fn assert_at_runtime() {
+        run("assert true;");
     }
 }

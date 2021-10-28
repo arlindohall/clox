@@ -88,14 +88,14 @@ pub(crate) struct Chunk {
 enum Precedence {
     PrecNone,
     PrecAssignment,
-    _PrecOr,
-    _PrecAnd,
-    _PrecEquality,
-    _PrecComparison,
+    PrecOr,
+    PrecAnd,
+    PrecEquality,
+    PrecComparison,
     PrecTerm,
-    _PrecFactor,
-    _PrecUnary,
-    _PrecCall,
+    PrecFactor,
+    PrecUnary,
+    PrecCall,
     PrecPrimary,
 }
 
@@ -480,79 +480,211 @@ impl<'a> Compiler<'a> {
 
     fn get_rule(&self, type_: &TokenType) -> ParseRule {
         match type_ {
-            And => todo!(),
-            Assert => todo!(),
-            Bang => todo!(),
-            BangEqual => todo!(),
-            Class => todo!(),
-            Comma => todo!(),
-            Dot => todo!(),
-            Else => todo!(),
+            And => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecAnd,
+            },
+            Assert => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            Bang => ParseRule {
+                prefix_rule: Some(unary),
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            BangEqual => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecEquality,
+            },
+            Class => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            Comma => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            Dot => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(dot),
+                precedence: PrecCall,
+            },
+            Else => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
             Eof => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
                 precedence: PrecNone,
             },
-            Equal => todo!(),
-            EqualEqual => todo!(),
-            Error => todo!(),
+            Equal => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            EqualEqual => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecEquality,
+            },
+            Error => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
             False => ParseRule {
-                prefix_rule: Some(boolean),
+                prefix_rule: Some(literal),
                 infix_rule: None,
                 precedence: PrecPrimary,
             },
-            For => todo!(),
-            Fun => todo!(),
-            Greater => todo!(),
-            GreaterEqual => todo!(),
-            Identifier => todo!(),
-            If => todo!(),
-            LeftBrace => todo!(),
-            LeftParen => todo!(),
-            Less => todo!(),
-            LessEqual => todo!(),
+            For => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            Fun => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            Greater => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecEquality,
+            },
+            GreaterEqual => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecEquality,
+            },
+            Identifier => ParseRule {
+                prefix_rule: Some(variable),
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            If => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            LeftBrace => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            LeftParen => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            Less => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecEquality,
+            },
+            LessEqual => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecEquality,
+            },
             Minus => ParseRule {
                 prefix_rule: Some(unary),
                 infix_rule: Some(binary),
                 precedence: PrecTerm,
             },
-            TokenNil => todo!(),
+            TokenNil => ParseRule {
+                prefix_rule: Some(literal),
+                infix_rule: None,
+                precedence: PrecNone,
+            },
             TokenNumber => ParseRule {
                 prefix_rule: Some(number),
                 infix_rule: None,
                 precedence: PrecAssignment,
             },
-            Or => todo!(),
+            Or => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecOr,
+            },
             Plus => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
                 precedence: PrecTerm,
             },
-            Print => todo!(),
-            Return => todo!(),
-            RightBrace => todo!(),
-            RightParen => todo!(),
+            Print => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            Return => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            RightBrace => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            RightParen => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
             Semicolon => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
                 precedence: PrecNone,
             },
-            Slash => todo!(),
-            Star => todo!(),
+            Slash => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecFactor,
+            },
+            Star => ParseRule {
+                prefix_rule: None,
+                infix_rule: Some(binary),
+                precedence: PrecFactor,
+            },
             TokenString => ParseRule {
                 prefix_rule: Some(string),
                 infix_rule: None,
                 precedence: PrecAssignment,
             },
-            Super => todo!(),
-            This => todo!(),
+            Super => ParseRule {
+                prefix_rule: Some(super_),
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            This => ParseRule {
+                prefix_rule: Some(this_),
+                infix_rule: None,
+                precedence: PrecNone,
+            },
             True => ParseRule {
-                prefix_rule: Some(boolean),
+                prefix_rule: Some(literal),
                 infix_rule: None,
                 precedence: PrecPrimary,
             },
-            Var => todo!(),
-            While => todo!(),
+            Var => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
+            While => ParseRule {
+                prefix_rule: None,
+                infix_rule: None,
+                precedence: PrecNone,
+            },
         }
     }
 
@@ -623,14 +755,14 @@ impl Precedence {
         vec![
             PrecNone,
             PrecAssignment,
-            _PrecOr,
-            _PrecAnd,
-            _PrecEquality,
-            _PrecComparison,
+            PrecOr,
+            PrecAnd,
+            PrecEquality,
+            PrecComparison,
             PrecTerm,
-            _PrecFactor,
-            _PrecUnary,
-            _PrecCall,
+            PrecFactor,
+            PrecUnary,
+            PrecCall,
             PrecPrimary,
         ]
     }
@@ -726,15 +858,32 @@ fn string(this: &mut Compiler, _can_assign: bool) {
     this.emit_bytes(OpConstant as u8, index);
 }
 
-fn boolean(this: &mut Compiler, _can_assign: bool) {
+fn literal(this: &mut Compiler, _can_assign: bool) {
     let token = &this.parser.previous.type_;
     let index = match token {
         True => this.make_constant(Value::Boolean(true)),
         False => this.make_constant(Value::Boolean(false)),
+        TokenNil => this.make_constant(Value::Nil),
         _ => panic!("Internal error: cannot make boolean (this is a bug)."),
     };
 
     this.emit_bytes(OpConstant as u8, index);
+}
+
+fn this_(this: &mut Compiler, _can_assign: bool) {
+    todo!("Compile a this expression for {:?}", this)
+}
+
+fn super_(this: &mut Compiler, _can_assign: bool) {
+    todo!("Compile a super expression for {:?}", this)
+}
+
+fn variable(this: &mut Compiler, _can_assign: bool) {
+    todo!("Compile a variable expression for {:?}", this)
+}
+
+fn dot(this: &mut Compiler, _can_assign: bool) {
+    todo!("Compile a dot expression for {:?}", this)
 }
 
 trait ConvertNumber {
@@ -849,7 +998,7 @@ mod test {
     }
 
     #[test]
-    fn test_compile_variable_declaration() {
+    fn compile_variable_declaration() {
         let (bytecode, vm) = compile_expression("var x;");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
@@ -872,7 +1021,7 @@ mod test {
     }
 
     #[test]
-    fn test_compile_simple_integer_expression() {
+    fn compile_simple_integer_expression() {
         let (bytecode, vm) = compile_expression("1;");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
@@ -883,7 +1032,7 @@ mod test {
     }
 
     #[test]
-    fn test_compile_print_expression() {
+    fn compile_print_expression() {
         let (bytecode, vm) = compile_expression("print 1;");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
@@ -900,7 +1049,7 @@ mod test {
     }
 
     #[test]
-    fn test_compile_print_string() {
+    fn compile_print_string() {
         let (bytecode, vm) = compile_expression("print \"hello\";");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
@@ -917,7 +1066,7 @@ mod test {
     }
 
     #[test]
-    fn test_add_two_numbers() {
+    fn add_two_numbers() {
         let (bytecode, vm) = compile_expression("1+1;");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
@@ -936,7 +1085,7 @@ mod test {
     }
 
     #[test]
-    fn test_subtract_two_numbers() {
+    fn subtract_two_numbers() {
         let (bytecode, vm) = compile_expression("1-1;");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
@@ -955,7 +1104,7 @@ mod test {
     }
 
     #[test]
-    fn test_negate_a_number() {
+    fn negate_a_number() {
         let (bytecode, vm) = compile_expression("-1;");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();
 
@@ -972,7 +1121,26 @@ mod test {
     }
 
     #[test]
-    fn test_compile_error_unexpected_end_of_expr() {
+    fn compare_for_equality() {
+        let (bytecode, vm) = compile_expression("1 == 1;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpEqual as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn compile_error_unexpected_end_of_expr() {
         let (mut err, _vm) = compile_broken(";");
         let mut errors = err.errors();
 
@@ -986,7 +1154,7 @@ mod test {
     }
 
     #[test]
-    fn test_compile_error_unterminated_string() {
+    fn compile_error_unterminated_string() {
         let (mut err, _vm) = compile_broken("\"a");
         let mut errors = err.errors();
 

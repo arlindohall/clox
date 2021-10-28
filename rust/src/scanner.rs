@@ -314,7 +314,7 @@ impl Scanner {
     }
 
     fn match_(&mut self, c: char) -> bool {
-        if self.is_at_end() || self.peek_next() != c {
+        if self.is_at_end() || self.peek() != c {
             false
         } else {
             self.current += 1;
@@ -463,7 +463,7 @@ mod test {
     }
 
     #[test]
-    fn test_error_unterminated_string() {
+    fn error_unterminated_string() {
         let mut scanner = scanner_of("\"a");
 
         assert_eq!(Error, scanner.scan_token().type_);
@@ -471,7 +471,7 @@ mod test {
     }
 
     #[test]
-    fn test_scan_a_single_number_expression_statement() {
+    fn scan_a_single_number_expression_statement() {
         let mut scanner = scanner_of("1;");
 
         assert_eq!(TokenNumber, scanner.scan_token().type_);
@@ -480,7 +480,7 @@ mod test {
     }
 
     #[test]
-    fn test_scan_a_single_string_expression_statement() {
+    fn scan_a_single_string_expression_statement() {
         let mut scanner = scanner_of("\"Hello, world!\";");
 
         assert_eq!(TokenString, scanner.scan_token().type_);
@@ -489,7 +489,7 @@ mod test {
     }
 
     #[test]
-    fn test_scan_a_print_statement() {
+    fn scan_a_print_statement() {
         let mut scanner = scanner_of("print \"greetings\";");
 
         assert_eq!(Print, scanner.scan_token().type_);
@@ -499,7 +499,7 @@ mod test {
     }
 
     #[test]
-    fn test_scan_variable_declaration() {
+    fn scan_variable_declaration() {
         let mut scanner = scanner_of("var x;");
 
         assert_eq!(Var, scanner.scan_token().type_);
@@ -509,7 +509,7 @@ mod test {
     }
 
     #[test]
-    fn test_scan_for_statement() {
+    fn scan_for_statement() {
         let mut scanner = scanner_of(
             "
         var x = 10;
@@ -556,7 +556,7 @@ mod test {
     }
 
     #[test]
-    fn test_scan_function_declaration() {
+    fn scan_function_declaration() {
         let text = "
         fun f(x) {
             return 10 + x;
