@@ -581,7 +581,7 @@ impl<'a> Compiler<'a> {
                 precedence: PrecNone,
             },
             LeftParen => ParseRule {
-                prefix_rule: None,
+                prefix_rule: Some(grouping),
                 infix_rule: None,
                 precedence: PrecNone,
             },
@@ -848,6 +848,11 @@ fn unary(this: &mut Compiler, _can_assign: bool) {
     }
 }
 
+fn grouping(this: &mut Compiler, _can_assign: bool) {
+    this.expression();
+    this.consume(RightParen, "Expected closing ')'.");
+}
+
 fn string(this: &mut Compiler, _can_assign: bool) {
     let start = this.parser.previous.start;
     let end = start + this.parser.previous.length;
@@ -864,7 +869,7 @@ fn literal(this: &mut Compiler, _can_assign: bool) {
         True => this.make_constant(Value::Boolean(true)),
         False => this.make_constant(Value::Boolean(false)),
         TokenNil => this.make_constant(Value::Nil),
-        _ => panic!("Internal error: cannot make boolean (this is a bug)."),
+        _ => panic!("Internal error: cannot make literal (this is a bug)."),
     };
 
     this.emit_bytes(OpConstant as u8, index);
@@ -985,7 +990,14 @@ mod test {
     fn compile_expression(expr: &str) -> (MemoryEntry, VM) {
         let mut vm = VM::default();
         let compiler = Compiler::new(&mut vm);
-        let function = compiler.compile(expr).unwrap();
+
+        let function = match compiler.compile(expr) {
+            Ok(f) => f,
+            Err(e) => {
+                println!("Error in test: {}", e);
+                panic!()
+            }
+        };
 
         (function, vm)
     }
@@ -1133,6 +1145,84 @@ mod test {
                 OpConstant as u8,
                 1,
                 OpEqual as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn greater_than_numbers() {
+        let (bytecode, vm) = compile_expression("2 > 1;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpGreater as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn greater_than_equal_numbers() {
+        let (bytecode, vm) = compile_expression("2 >= 1;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpGreaterEqual as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn less_than_numbers() {
+        let (bytecode, vm) = compile_expression("2 < 1;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpGreaterEqual as u8,
+                OpNot as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn less_than_equal_numbers() {
+        let (bytecode, vm) = compile_expression("2 <= 1;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpGreater as u8,
+                OpNot as u8,
                 OpPop as u8,
                 OpReturn as u8,
             ]

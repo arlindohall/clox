@@ -149,22 +149,17 @@ impl VM {
     /// Compile the script or line of code into bytecode, then
     /// execute the bytecode, all in the context of the VM that
     /// is set up with [new](#method.new).
-    pub fn interpret(mut self, statement: &str) -> VM {
+    pub fn interpret(mut self, statement: &str) -> Result<VM, LoxErrorChain> {
         let compiler = Compiler::new(&mut self);
 
         // Pass in the VM that calls the compiler so that the
         // compiler can swap itself out for a child compiler
-        let function = compiler.compile(statement);
+        let function = compiler.compile(statement)?;
 
-        match function {
-            Ok(func) => {
-                self.call(&func, 0);
-                self.run();
-            }
-            Err(error) => println!("{}", error),
-        }
+        self.call(&function, 0);
+        self.run();
 
-        self
+        Ok(self)
     }
 
     fn call(&mut self, mem_entry: &MemoryEntry, argc: usize) {
@@ -415,7 +410,13 @@ mod test {
     use super::*;
 
     fn run(statement: &str) {
-        VM::default().interpret(statement);
+        match VM::default().interpret(statement) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("Error interpreting statement {}", e);
+                panic!()
+            }
+        }
     }
 
     #[test]

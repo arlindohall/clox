@@ -53,7 +53,7 @@ impl Lox {
 
         prompt()?;
         for line in lock.lines() {
-            self.vm = self.vm.interpret(line?.as_str());
+            self.vm = self.vm.interpret(line?.as_str())?;
             prompt()?;
         }
 
@@ -70,7 +70,7 @@ impl Lox {
 
         file.read_to_string(&mut contents)?;
 
-        self.vm.interpret(contents.as_str());
+        self.vm.interpret(contents.as_str()).unwrap();
 
         Ok(())
     }
