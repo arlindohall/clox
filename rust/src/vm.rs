@@ -292,8 +292,26 @@ impl VM {
 
                     self.stack.push(Boolean(equal))
                 }
-                OpGreater => todo!("compare if value a is greater than value b"),
-                OpGreaterEqual => todo!("compare if value a is greater or equal value b"),
+                OpGreater => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+
+                    if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
+                        self.stack.push(Boolean(a > b))
+                    } else {
+                        self.runtime_error("Cannot compare two non-numbers.")
+                    }
+                }
+                OpGreaterEqual => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+
+                    if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
+                        self.stack.push(Boolean(a >= b))
+                    } else {
+                        self.runtime_error("Cannot compare two non-numbers.")
+                    }
+                },
                 OpOr => todo!("logical or of two arguments"),
                 OpMultiply => todo!("multiply two numbers"),
                 OpDivide => todo!("divide two numbers"),
@@ -437,5 +455,37 @@ mod test {
     #[test]
     fn add_two_numbers() {
         run("assert 1 + 1 == 2;")
+    }
+
+    #[test]
+    fn greater_than_numbers() {
+        run("assert 2 > 1;
+            assert ! (1 > 1);
+            assert ! (0 > 1);"
+        );
+    }
+
+    #[test]
+    fn greater_than_equal_numbers() {
+        run("assert 2 >= 1;
+            assert 1 >= 1;
+            assert ! (0 > 1);"
+        );
+    }
+
+    #[test]
+    fn less_than_numbers() {
+        run("assert ! (2 < 1);
+            assert ! (1 < 1);
+            assert 0 < 1;"
+        );
+    }
+
+    #[test]
+    fn less_than_equal_numbers() {
+        run("assert ! (2 <= 1);
+            assert 1 <= 1;
+            assert 0 <= 1;"
+        );
     }
 }
