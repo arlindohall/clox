@@ -16,10 +16,6 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn is_string(&self) -> bool {
-        todo!("check if value is a string")
-    }
-
     pub fn as_string<'a>(&self, mem: &'a Memory) -> &'a String {
         if let Value::Object(ptr) = self {
             mem.retrieve(ptr).as_string()
@@ -28,12 +24,11 @@ impl Value {
         }
     }
 
-    pub fn is_number(&self) -> bool {
-        todo!("check if value is a number")
-    }
-
-    pub fn as_number(&self) -> f64 {
-        todo!("convert a value to a number")
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            Value::Number(n) => Some(*n),
+            _ => None,
+        }
     }
 
     pub fn as_boolean(&self) -> bool {

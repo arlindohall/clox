@@ -217,13 +217,12 @@ impl VM {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
 
-                    if v1.is_string() && v2.is_string() {
+                    if self.is_string(&v1) && self.is_string(&v2) {
                         let string = self
                             .concatenate(v1.as_string(&self.memory), v2.as_string(&self.memory));
                         self.stack.push(string)
-                    } else if v1.is_number() && v2.is_number() {
-                        let number = Number(v1.as_number() + v2.as_number());
-                        self.stack.push(number)
+                    } else if let (Some(n1), Some(n2)) = (v1.as_number(), v2.as_number()) {
+                        self.stack.push(Number(n1 + n2))
                     } else {
                         self.runtime_error("Operands must be two numbers or two strings.")
                     }
@@ -335,6 +334,18 @@ impl VM {
         let frame = self.frames.last().unwrap();
         self.closure(frame).chunk.code.get(frame.ip - 1).unwrap()
     }
+
+    pub fn is_string(&self, value: &Value) -> bool {
+        match value {
+            Object(ptr) => {
+                match self.memory.retrieve(ptr) {
+                    crate::object::Object::ObjString(_) => true,
+                    _ => false
+                }
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Display for LoxErrorChain {
@@ -423,5 +434,10 @@ mod test {
     #[test]
     fn compare_two_numbers() {
         run("assert 1 == 1;")
+    }
+
+    #[test]
+    fn add_two_numbers() {
+        run("assert 1 + 1 == 2;")
     }
 }
