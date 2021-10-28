@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::Display;
 
 use crate::compiler::{Compiler, Function};
-use crate::object::{Memory, MemoryEntry};
+use crate::object::{Memory, MemoryEntry, Object::*};
 use crate::value::Value;
 use crate::value::Value::*;
 
@@ -286,7 +286,7 @@ impl VM {
                     let v2 = self.stack.pop().unwrap();
 
                     let equal = match (v1, v2) {
-                        (Number(n1), Number(n2)) => n1 == n2,
+                        (Number(n1), Number(n2)) => (n2 - n1).abs() <= f64::EPSILON,
                         (Boolean(b1), Boolean(b2)) => b1 == b2,
                         (Nil, Nil) => true,
                         (Object(o1), Object(o2)) => o1 == o2,
@@ -338,10 +338,7 @@ impl VM {
     pub fn is_string(&self, value: &Value) -> bool {
         match value {
             Object(ptr) => {
-                match self.memory.retrieve(ptr) {
-                    crate::object::Object::ObjString(_) => true,
-                    _ => false
-                }
+                matches!(self.memory.retrieve(ptr), ObjString(_))
             }
             _ => false,
         }

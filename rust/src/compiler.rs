@@ -87,16 +87,16 @@ pub(crate) struct Chunk {
 #[derive(Debug, Clone)]
 enum Precedence {
     PrecNone,
-    PrecAssignment,
+    Assignment,
     PrecOr,
     PrecAnd,
-    PrecEquality,
-    PrecComparison,
-    PrecTerm,
-    PrecFactor,
-    PrecUnary,
-    PrecCall,
-    PrecPrimary,
+    Equality,
+    Comparison,
+    Term,
+    Factor,
+    Unary,
+    Call,
+    Primary,
 }
 
 struct ParseRule {
@@ -298,7 +298,7 @@ impl<'a> Compiler<'a> {
 
     fn expression(&mut self) {
         // Called parsePrecedence in the book
-        self.expression_with_precedence(PrecAssignment);
+        self.expression_with_precedence(Assignment);
     }
 
     fn emit_bytes(&mut self, op1: u8, op2: u8) {
@@ -451,7 +451,7 @@ impl<'a> Compiler<'a> {
         self.advance();
 
         let prefix_rule: Option<ParseFn> = self.previous_rule().prefix_rule;
-        let can_assign = precedence <= PrecAssignment.into();
+        let can_assign = precedence <= Assignment.into();
 
         match prefix_rule {
             Some(rule) => rule(self, can_assign),
@@ -498,7 +498,7 @@ impl<'a> Compiler<'a> {
             BangEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecEquality,
+                precedence: Equality,
             },
             Class => ParseRule {
                 prefix_rule: None,
@@ -513,7 +513,7 @@ impl<'a> Compiler<'a> {
             Dot => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(dot),
-                precedence: PrecCall,
+                precedence: Call,
             },
             Else => ParseRule {
                 prefix_rule: None,
@@ -533,7 +533,7 @@ impl<'a> Compiler<'a> {
             EqualEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecEquality,
+                precedence: Equality,
             },
             Error => ParseRule {
                 prefix_rule: None,
@@ -543,7 +543,7 @@ impl<'a> Compiler<'a> {
             False => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: PrecPrimary,
+                precedence: Primary,
             },
             For => ParseRule {
                 prefix_rule: None,
@@ -558,12 +558,12 @@ impl<'a> Compiler<'a> {
             Greater => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecEquality,
+                precedence: Equality,
             },
             GreaterEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecEquality,
+                precedence: Equality,
             },
             Identifier => ParseRule {
                 prefix_rule: Some(variable),
@@ -588,17 +588,17 @@ impl<'a> Compiler<'a> {
             Less => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecEquality,
+                precedence: Equality,
             },
             LessEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecEquality,
+                precedence: Equality,
             },
             Minus => ParseRule {
                 prefix_rule: Some(unary),
                 infix_rule: Some(binary),
-                precedence: PrecTerm,
+                precedence: Term,
             },
             TokenNil => ParseRule {
                 prefix_rule: Some(literal),
@@ -608,7 +608,7 @@ impl<'a> Compiler<'a> {
             TokenNumber => ParseRule {
                 prefix_rule: Some(number),
                 infix_rule: None,
-                precedence: PrecAssignment,
+                precedence: Assignment,
             },
             Or => ParseRule {
                 prefix_rule: None,
@@ -618,7 +618,7 @@ impl<'a> Compiler<'a> {
             Plus => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecTerm,
+                precedence: Term,
             },
             Print => ParseRule {
                 prefix_rule: None,
@@ -648,17 +648,17 @@ impl<'a> Compiler<'a> {
             Slash => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecFactor,
+                precedence: Factor,
             },
             Star => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecFactor,
+                precedence: Factor,
             },
             TokenString => ParseRule {
                 prefix_rule: Some(string),
                 infix_rule: None,
-                precedence: PrecAssignment,
+                precedence: Assignment,
             },
             Super => ParseRule {
                 prefix_rule: Some(super_),
@@ -673,7 +673,7 @@ impl<'a> Compiler<'a> {
             True => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: PrecPrimary,
+                precedence: Primary,
             },
             Var => ParseRule {
                 prefix_rule: None,
@@ -754,16 +754,16 @@ impl Precedence {
     fn values() -> Vec<Precedence> {
         vec![
             PrecNone,
-            PrecAssignment,
+            Assignment,
             PrecOr,
             PrecAnd,
-            PrecEquality,
-            PrecComparison,
-            PrecTerm,
-            PrecFactor,
-            PrecUnary,
-            PrecCall,
-            PrecPrimary,
+            Equality,
+            Comparison,
+            Term,
+            Factor,
+            Unary,
+            Call,
+            Primary,
         ]
     }
 }
