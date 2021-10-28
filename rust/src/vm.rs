@@ -106,9 +106,16 @@ impl Op {
         vec![
             OpAssert,
             OpAdd,
+            OpAnd,
             OpConstant,
             OpDefineGlobal,
+            OpDivide,
+            OpEqual,
+            OpGreater,
+            OpGreaterEqual,
+            OpOr,
             OpPop,
+            OpMultiply,
             OpPrint,
             OpNil,
             OpNegate,
@@ -275,7 +282,22 @@ impl VM {
 
                     self.stack.push(Boolean(v1 && v2))
                 }
-                OpEqual => todo!("compare two values for equality"),
+                OpEqual => {
+                    let v1 = self.stack.pop().unwrap();
+                    let v2 = self.stack.pop().unwrap();
+
+                    let equal = match (v1, v2) {
+                        (Number(n1), Number(n2)) => n1 == n2,
+                        (Boolean(b1), Boolean(b2)) => b1 == b2,
+                        (Nil, Nil) => true,
+                        (Object(o1), Object(o2)) => o1 == o2,
+                        _ => {
+                            false
+                        }
+                    };
+
+                    self.stack.push(Boolean(equal))
+                }
                 OpGreater => todo!("compare if value a is greater than value b"),
                 OpGreaterEqual => todo!("compare if value a is greater or equal value b"),
                 OpOr => todo!("logical or of two arguments"),
@@ -396,5 +418,10 @@ mod test {
     #[test]
     fn assert_at_runtime() {
         run("assert true;");
+    }
+
+    #[test]
+    fn compare_two_numbers() {
+        run("assert 1 == 1;")
     }
 }
