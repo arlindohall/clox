@@ -18,7 +18,7 @@ pub(crate) enum DebugOutput {
     GraphViz,
 }
 
-static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::GraphViz;
+static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::None;
 const UNINITIALIZED: isize = -1;
 
 /// Compiler used for a single function or script.
@@ -307,7 +307,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_byte(&mut self, op: u8) {
-        let line = self.parser.current.line;
+        let line = self.parser.previous.line;
         self.function().chunk.lines.push(line);
         self.function().chunk.code.push(op)
     }

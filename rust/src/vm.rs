@@ -151,7 +151,7 @@ impl VM {
 
         match function {
             Ok(func) => {
-                self.call(&func, crate::object::mem(0), 0);
+                self.call(&func, 0);
                 self.run();
             }
             Err(error) => println!("{}", error),
@@ -160,8 +160,8 @@ impl VM {
         self
     }
 
-    fn call(&mut self, closure: &MemoryEntry, mem_entry: MemoryEntry, argc: usize) {
-        let closure = self.memory.retrieve_mut(closure).as_function();
+    fn call(&mut self, mem_entry: &MemoryEntry, argc: usize) {
+        let closure = self.memory.retrieve_mut(mem_entry).as_function();
         if closure.arity != argc {
             let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
             self.runtime_error(message);
@@ -172,7 +172,7 @@ impl VM {
         }
 
         self.frames.push(CallFrame {
-            closure: mem_entry,
+            closure: mem_entry.clone(),
             ip: 0,
             slots: 0,
             // slots: self.stack.len() - argc - 1,
@@ -183,7 +183,6 @@ impl VM {
         let message = message.to_string();
 
         self.error_chain.register(LoxError::RuntimeError {
-            // todo: track line numbers with bytecode
             message,
             line: self.line_number(),
         })
