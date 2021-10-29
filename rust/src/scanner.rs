@@ -345,7 +345,7 @@ impl Scanner {
                             }
                         }
                     } else {
-                        continue 'whitespace;
+                        break 'whitespace;
                     }
                 }
                 // The only place where we break is when something
