@@ -15,14 +15,14 @@ impl Eq for MemoryEntry {}
 
 #[derive(Debug)]
 pub enum Object {
-    _ObjBoundMethod(),
-    _ObjClass(),
-    _ObjClosure(),
-    ObjFunction(Box<Function>),
-    _ObjInstance(),
-    _ObjNative(),
-    ObjString(Box<String>),
-    _ObjUpvalue(),
+    _BoundMethod(),
+    _Class(),
+    _Closure(),
+    Function(Box<Function>),
+    _Instance(),
+    _Native(),
+    String(Box<String>),
+    _Upvalue(),
 }
 
 #[derive(Debug)]
@@ -44,7 +44,7 @@ impl Default for Memory {
 
 impl Memory {
     pub fn allocate(&mut self, object: Object) -> MemoryEntry {
-        if let Object::ObjString(s) = object {
+        if let Object::String(s) = object {
             self.intern(s)
         } else {
             self.insert(object)
@@ -62,7 +62,7 @@ impl Memory {
     fn intern(&mut self, string: Box<String>) -> MemoryEntry {
         match self.strings.get(&string) {
             Some(m_loc) => m_loc.clone(),
-            None => self.insert(Object::ObjString(string)),
+            None => self.insert(Object::String(string)),
         }
     }
 
@@ -78,14 +78,14 @@ impl Memory {
 impl Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Object::_ObjBoundMethod() => todo!("display a bound method"),
-            Object::_ObjClass() => todo!("display a class"),
-            Object::_ObjClosure() => todo!("display a closure"),
-            Object::ObjFunction(func) => write!(f, "fn<{}>", func.name),
-            Object::_ObjInstance() => todo!("display an instance"),
-            Object::_ObjNative() => todo!("display a native function"),
-            Object::ObjString(s) => write!(f, "{}", s),
-            Object::_ObjUpvalue() => todo!("display an upvalue"),
+            Object::_BoundMethod() => todo!("display a bound method"),
+            Object::_Class() => todo!("display a class"),
+            Object::_Closure() => todo!("display a closure"),
+            Object::Function(func) => write!(f, "fn<{}>", func.name),
+            Object::_Instance() => todo!("display an instance"),
+            Object::_Native() => todo!("display a native function"),
+            Object::String(s) => write!(f, "{}", s),
+            Object::_Upvalue() => todo!("display an upvalue"),
         }
     }
 }
@@ -93,13 +93,13 @@ impl Display for Object {
 impl Object {
     pub fn as_mut_function(&mut self) -> &mut Function {
         match self {
-            Object::ObjFunction(f) => f,
+            Object::Function(f) => f,
             _ => panic!("Internal error: expected lox function type."),
         }
     }
     pub fn as_function(&self) -> &Function {
         match self {
-            Object::ObjFunction(f) => f,
+            Object::Function(f) => f,
             _ => panic!("Internal error: expected lox function type."),
         }
     }

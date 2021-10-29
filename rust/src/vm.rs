@@ -2,9 +2,8 @@ use std::error::Error;
 use std::fmt::Display;
 
 use crate::compiler::{Compiler, Function};
-use crate::object::{Memory, MemoryEntry, Object::*};
+use crate::object::{Memory, MemoryEntry, Object};
 use crate::value::Value;
-use crate::value::Value::*;
 
 const MAX_FRAMES: usize = 265;
 
@@ -60,27 +59,25 @@ pub struct LoxErrorChain {
 #[derive(Clone, Debug)]
 #[repr(u8)]
 pub enum Op {
-    OpAssert,
-    OpAdd,
-    OpAnd,
-    OpConstant,
-    OpDefineGlobal,
-    OpDivide,
-    OpEqual,
-    OpGreater,
-    OpGreaterEqual,
-    OpOr,
-    OpPop,
-    OpMultiply,
-    OpPrint,
-    OpNil,
-    OpNegate,
-    OpNot,
-    OpReturn,
-    OpSubtract,
+    Assert,
+    Add,
+    And,
+    Constant,
+    DefineGlobal,
+    Divide,
+    Equal,
+    Greater,
+    GreaterEqual,
+    Or,
+    Pop,
+    Multiply,
+    Print,
+    Nil,
+    Negate,
+    Not,
+    Return,
+    Subtract,
 }
-
-use Op::*;
 
 impl From<&Op> for u8 {
     fn from(op: &Op) -> u8 {
@@ -104,24 +101,24 @@ impl From<&u8> for Op {
 impl Op {
     pub(crate) fn values() -> Vec<Op> {
         vec![
-            OpAssert,
-            OpAdd,
-            OpAnd,
-            OpConstant,
-            OpDefineGlobal,
-            OpDivide,
-            OpEqual,
-            OpGreater,
-            OpGreaterEqual,
-            OpOr,
-            OpPop,
-            OpMultiply,
-            OpPrint,
-            OpNil,
-            OpNegate,
-            OpNot,
-            OpReturn,
-            OpSubtract,
+            Op::Assert,
+            Op::Add,
+            Op::And,
+            Op::Constant,
+            Op::DefineGlobal,
+            Op::Divide,
+            Op::Equal,
+            Op::Greater,
+            Op::GreaterEqual,
+            Op::Or,
+            Op::Pop,
+            Op::Multiply,
+            Op::Print,
+            Op::Nil,
+            Op::Negate,
+            Op::Not,
+            Op::Return,
+            Op::Subtract,
         ]
     }
 }
@@ -200,11 +197,11 @@ impl VM {
             let op = self.read_byte().into();
 
             match op {
-                OpAssert => {
+                Op::Assert => {
                     let val = self.stack.last().unwrap();
 
                     match val {
-                        Boolean(false) | Nil => {
+                        Value::Boolean(false) | Value::Nil => {
                             self.runtime_error("Failed assertion");
                             // todo: should this exit or just revert to top level?
                             panic!("Assertion failed: {}", self.error_chain)
@@ -212,7 +209,7 @@ impl VM {
                         _ => (),
                     }
                 }
-                OpAdd => {
+                Op::Add => {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
 
@@ -221,128 +218,126 @@ impl VM {
                             .concatenate(v1.as_string(&self.memory), v2.as_string(&self.memory));
                         self.stack.push(string)
                     } else if let (Some(n1), Some(n2)) = (v1.as_number(), v2.as_number()) {
-                        self.stack.push(Number(n1 + n2))
+                        self.stack.push(Value::Number(n1 + n2))
                     } else {
                         self.runtime_error("Operands must be two numbers or two strings.")
                     }
                 }
-                OpConstant => {
+                Op::Constant => {
                     let constant = self.read_constant().clone();
                     self.stack.push(constant);
                 }
-                OpDefineGlobal => todo!(),
-                OpPop => {
+                Op::DefineGlobal => todo!(),
+                Op::Pop => {
                     self.stack.pop();
                 }
-                OpPrint => {
+                Op::Print => {
                     let val = self.stack.last().unwrap();
 
                     match val {
-                        Nil => println!("nil"),
-                        Number(n) => println!("{}", n),
-                        Boolean(b) => println!("{}", b),
-                        Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
+                        Value::Nil => println!("nil"),
+                        Value::Number(n) => println!("{}", n),
+                        Value::Boolean(b) => println!("{}", b),
+                        Value::Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
                     }
                 }
-                OpNil => self.stack.push(Nil),
-                OpNegate => {
+                Op::Nil => self.stack.push(Value::Nil),
+                Op::Negate => {
                     let val = self.stack.pop().unwrap();
 
                     match val {
-                        Number(n) => self.stack.push(Number(-n)),
+                        Value::Number(n) => self.stack.push(Value::Number(-n)),
                         _ => self.runtime_error("Cannot negate non-number."),
                     }
                 }
-                OpNot => {
+                Op::Not => {
                     let val = self.stack.pop().unwrap();
 
-                    let opposite = matches!(val, Nil | Boolean(false));
-                    self.stack.push(Boolean(opposite))
+                    let opposite = matches!(val, Value::Nil | Value::Boolean(false));
+                    self.stack.push(Value::Boolean(opposite))
                 }
-                OpReturn => {
+                Op::Return => {
                     // todo: return from function, for now no-op
                     return;
                 }
-                OpSubtract => {
+                Op::Subtract => {
                     // Popped in reverse order they were pushed, expecting a-b
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
 
-                    if let (Number(a), Number(b)) = (a, b) {
-                        self.stack.push(Number(a - b))
+                    if let (Value::Number(a), Value::Number(b)) = (a, b) {
+                        self.stack.push(Value::Number(a - b))
                     } else {
                         self.runtime_error("Cannot subtract non-numbers")
                     }
                 }
-                OpMultiply => {
+                Op::Multiply => {
                     // Popped in reverse order they were pushed, expecting a-b
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
 
-                    if let (Number(a), Number(b)) = (a, b) {
-                        self.stack.push(Number(a * b))
+                    if let (Value::Number(a), Value::Number(b)) = (a, b) {
+                        self.stack.push(Value::Number(a * b))
                     } else {
                         self.runtime_error("Cannot multiply non-numbers")
                     }
                 }
-                OpDivide => {
+                Op::Divide => {
                     // Popped in reverse order they were pushed, expecting a-b
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
 
-                    if let (Number(a), Number(b)) = (a, b) {
-                        self.stack.push(Number(a / b))
+                    if let (Value::Number(a), Value::Number(b)) = (a, b) {
+                        self.stack.push(Value::Number(a / b))
                     } else {
                         self.runtime_error("Cannot divide non-numbers")
                     }
                 }
-                OpAnd => {
+                Op::And => {
                     let v1 = self.stack.pop().unwrap().as_boolean();
                     let v2 = self.stack.pop().unwrap().as_boolean();
 
-                    self.stack.push(Boolean(v1 && v2))
+                    self.stack.push(Value::Boolean(v1 && v2))
                 }
-                OpEqual => {
+                Op::Equal => {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
 
                     let equal = match (v1, v2) {
-                        (Number(n1), Number(n2)) => (n2 - n1).abs() <= f64::EPSILON,
-                        (Boolean(b1), Boolean(b2)) => b1 == b2,
-                        (Nil, Nil) => true,
-                        (Object(o1), Object(o2)) => o1 == o2,
-                        _ => {
-                            false
-                        }
+                        (Value::Number(n1), Value::Number(n2)) => (n2 - n1).abs() <= f64::EPSILON,
+                        (Value::Boolean(b1), Value::Boolean(b2)) => b1 == b2,
+                        (Value::Nil, Value::Nil) => true,
+                        (Value::Object(o1), Value::Object(o2)) => o1 == o2,
+                        _ => false,
                     };
 
-                    self.stack.push(Boolean(equal))
+                    self.stack.push(Value::Boolean(equal))
                 }
-                OpGreater => {
+                Op::Greater => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
 
                     if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
-                        self.stack.push(Boolean(a > b))
+                        self.stack.push(Value::Boolean(a > b))
                     } else {
                         self.runtime_error("Cannot compare two non-numbers.")
                     }
                 }
-                OpGreaterEqual => {
+                Op::GreaterEqual => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
 
                     if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
-                        self.stack.push(Boolean(a >= b))
+                        self.stack.push(Value::Boolean(a >= b))
                     } else {
                         self.runtime_error("Cannot compare two non-numbers.")
                     }
                 }
-                OpOr => {
+                Op::Or => {
                     let v1 = self.stack.pop().unwrap().as_boolean();
                     let v2 = self.stack.pop().unwrap().as_boolean();
 
-                    self.stack.push(Boolean(v1 || v2))
+                    self.stack.push(Value::Boolean(v1 || v2))
                 }
             }
         }
@@ -379,8 +374,8 @@ impl VM {
 
     pub fn is_string(&self, value: &Value) -> bool {
         match value {
-            Object(ptr) => {
-                matches!(self.memory.retrieve(ptr), ObjString(_))
+            Value::Object(ptr) => {
+                matches!(self.memory.retrieve(ptr), Object::String(_))
             }
             _ => false,
         }
@@ -496,38 +491,33 @@ mod test {
     fn greater_than_numbers() {
         run("assert 2 > 1;
             assert ! (1 > 1);
-            assert ! (0 > 1);"
-        );
+            assert ! (0 > 1);");
     }
 
     #[test]
     fn greater_than_equal_numbers() {
         run("assert 2 >= 1;
             assert 1 >= 1;
-            assert ! (0 > 1);"
-        );
+            assert ! (0 > 1);");
     }
 
     #[test]
     fn less_than_numbers() {
         run("assert ! (2 < 1);
             assert ! (1 < 1);
-            assert 0 < 1;"
-        );
+            assert 0 < 1;");
     }
 
     #[test]
     fn less_than_equal_numbers() {
         run("assert ! (2 <= 1);
             assert 1 <= 1;
-            assert 0 <= 1;"
-        );
+            assert 0 <= 1;");
     }
 
     #[test]
     fn multiply_and_divide() {
         run("assert 2 * 2 == 4;
-            assert 10 / 5 == 2;"
-        );
+            assert 10 / 5 == 2;");
     }
 }

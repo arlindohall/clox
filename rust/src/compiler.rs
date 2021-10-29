@@ -1,14 +1,13 @@
 use crate::object::MemoryEntry;
-use crate::object::Object::*;
+use crate::object::Object;
 use crate::scanner::Scanner;
 use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::scanner::TokenType::*;
-use crate::value::{Value, Value::*};
-use crate::vm::LoxError::*;
+use crate::value::Value;
+use crate::vm::LoxError::ParseError;
 use crate::vm::LoxErrorChain;
 use crate::vm::Op;
-use crate::vm::Op::*;
 use crate::vm::VM;
 
 #[allow(dead_code)]
@@ -85,11 +84,11 @@ pub(crate) struct Chunk {
 }
 
 #[derive(Debug, Clone)]
-enum Precedence {
-    PrecNone,
+enum Prec {
+    None,
     Assignment,
-    PrecOr,
-    PrecAnd,
+    Or,
+    And,
     Equality,
     Comparison,
     Term,
@@ -102,7 +101,7 @@ enum Precedence {
 struct ParseRule {
     prefix_rule: Option<ParseFn>,
     infix_rule: Option<ParseFn>,
-    precedence: Precedence,
+    precedence: Prec,
 }
 
 type ParseFn = fn(&mut Compiler, bool);
@@ -110,7 +109,6 @@ type ParseFn = fn(&mut Compiler, bool);
 use bigdecimal::BigDecimal;
 use bigdecimal::Num;
 use bigdecimal::ToPrimitive;
-use Precedence::*;
 
 impl<'a> Compiler<'a> {
     /// Create a new compiler with empty source and no errors.
@@ -127,7 +125,7 @@ impl<'a> Compiler<'a> {
                 constants: Vec::new(),
             },
         };
-        let function = vm.memory.allocate(ObjFunction(Box::new(entry_point)));
+        let function = vm.memory.allocate(Object::Function(Box::new(entry_point)));
         Compiler {
             vm,
             function,
@@ -254,8 +252,8 @@ impl<'a> Compiler<'a> {
     /// Constants:
     ///     1: "x"
     /// Code:
-    ///     OpNil
-    ///     OpDefineGlobal
+    ///     Op::Nil
+    ///     Op::DefineGlobal
     ///     1
     /// ```
     fn var_declaration(&mut self) {
@@ -264,7 +262,7 @@ impl<'a> Compiler<'a> {
         if self.match_(Equal) {
             self.expression();
         } else {
-            self.emit_byte(OpNil as u8);
+            self.emit_byte(Op::Nil as u8);
         }
         self.consume(Semicolon, "Expect ';' after variable declaration.");
 
@@ -281,7 +279,7 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        self.emit_bytes(OpDefineGlobal as u8, name);
+        self.emit_bytes(Op::DefineGlobal as u8, name);
     }
 
     fn mark_initialized(&self) {
@@ -298,7 +296,7 @@ impl<'a> Compiler<'a> {
 
     fn expression(&mut self) {
         // Called parsePrecedence in the book
-        self.expression_with_precedence(Assignment);
+        self.expression_with_precedence(Prec::Assignment);
     }
 
     fn emit_bytes(&mut self, op1: u8, op2: u8) {
@@ -313,7 +311,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_return(&mut self) {
-        self.emit_byte(OpReturn as u8)
+        self.emit_byte(Op::Return as u8)
     }
 
     fn parse_variable(&mut self, message: &str) -> u8 {
@@ -367,7 +365,7 @@ impl<'a> Compiler<'a> {
         let start = self.parser.previous.start;
         let end = self.parser.previous.length + self.parser.previous.start;
         let obj_pointer = self.copy_string(start, end);
-        self.make_constant(Object(obj_pointer))
+        self.make_constant(Value::Object(obj_pointer))
     }
 
     fn class_declaration(&self) {
@@ -403,13 +401,13 @@ impl<'a> Compiler<'a> {
     fn print_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after expression.");
-        self.emit_bytes(OpPrint as u8, OpPop as u8);
+        self.emit_bytes(Op::Print as u8, Op::Pop as u8);
     }
 
     fn assert_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after assertion statement.");
-        self.emit_bytes(OpAssert as u8, OpPop as u8);
+        self.emit_bytes(Op::Assert as u8, Op::Pop as u8);
     }
 
     fn for_statement(&self) {
@@ -431,7 +429,7 @@ impl<'a> Compiler<'a> {
     fn epxression_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after expression.");
-        self.emit_byte(OpPop as u8);
+        self.emit_byte(Op::Pop as u8);
     }
 
     fn block(&self) {
@@ -446,12 +444,12 @@ impl<'a> Compiler<'a> {
         todo!("end a scope")
     }
 
-    fn expression_with_precedence(&mut self, precedence: Precedence) {
+    fn expression_with_precedence(&mut self, precedence: Prec) {
         let precedence: u8 = precedence.into();
         self.advance();
 
         let prefix_rule: Option<ParseFn> = self.previous_rule().prefix_rule;
-        let can_assign = precedence <= Assignment.into();
+        let can_assign = precedence <= Prec::Assignment.into();
 
         match prefix_rule {
             Some(rule) => rule(self, can_assign),
@@ -483,213 +481,213 @@ impl<'a> Compiler<'a> {
             And => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecAnd,
+                precedence: Prec::And,
             },
             Assert => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Bang => ParseRule {
                 prefix_rule: Some(unary),
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             BangEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Equality,
+                precedence: Prec::Equality,
             },
             Class => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Comma => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Dot => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(dot),
-                precedence: Call,
+                precedence: Prec::Call,
             },
             Else => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Eof => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Equal => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             EqualEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Equality,
+                precedence: Prec::Equality,
             },
             Error => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             False => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: Primary,
+                precedence: Prec::Primary,
             },
             For => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Fun => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Greater => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Equality,
+                precedence: Prec::Equality,
             },
             GreaterEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Equality,
+                precedence: Prec::Equality,
             },
             Identifier => ParseRule {
                 prefix_rule: Some(variable),
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             If => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             LeftBrace => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             LeftParen => ParseRule {
                 prefix_rule: Some(grouping),
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Less => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Equality,
+                precedence: Prec::Equality,
             },
             LessEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Equality,
+                precedence: Prec::Equality,
             },
             Minus => ParseRule {
                 prefix_rule: Some(unary),
                 infix_rule: Some(binary),
-                precedence: Term,
+                precedence: Prec::Term,
             },
             TokenNil => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             TokenNumber => ParseRule {
                 prefix_rule: Some(number),
                 infix_rule: None,
-                precedence: Assignment,
+                precedence: Prec::Assignment,
             },
             Or => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: PrecOr,
+                precedence: Prec::Or,
             },
             Plus => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Term,
+                precedence: Prec::Term,
             },
             Print => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Return => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             RightBrace => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             RightParen => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Semicolon => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             Slash => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Factor,
+                precedence: Prec::Factor,
             },
             Star => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Factor,
+                precedence: Prec::Factor,
             },
             TokenString => ParseRule {
                 prefix_rule: Some(string),
                 infix_rule: None,
-                precedence: Assignment,
+                precedence: Prec::Assignment,
             },
             Super => ParseRule {
                 prefix_rule: Some(super_),
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             This => ParseRule {
                 prefix_rule: Some(this_),
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             True => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: Primary,
+                precedence: Prec::Primary,
             },
             Var => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
             While => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: PrecNone,
+                precedence: Prec::None,
             },
         }
     }
 
     fn copy_string(&mut self, start: usize, end: usize) -> MemoryEntry {
-        let string = ObjString(self.scanner.copy_segment(start, end));
+        let string = Object::String(self.scanner.copy_segment(start, end));
         self.vm.memory.allocate(string)
     }
 
@@ -750,33 +748,33 @@ impl<'a> Compiler<'a> {
     }
 }
 
-impl Precedence {
-    fn values() -> Vec<Precedence> {
+impl Prec {
+    fn values() -> Vec<Prec> {
         vec![
-            PrecNone,
-            Assignment,
-            PrecOr,
-            PrecAnd,
-            Equality,
-            Comparison,
-            Term,
-            Factor,
-            Unary,
-            Call,
-            Primary,
+            Prec::None,
+            Prec::Assignment,
+            Prec::Or,
+            Prec::And,
+            Prec::Equality,
+            Prec::Comparison,
+            Prec::Term,
+            Prec::Factor,
+            Prec::Unary,
+            Prec::Call,
+            Prec::Primary,
         ]
     }
 }
 
-impl From<Precedence> for u8 {
-    fn from(prec: Precedence) -> Self {
+impl From<Prec> for u8 {
+    fn from(prec: Prec) -> Self {
         prec as u8
     }
 }
 
-impl From<u8> for Precedence {
+impl From<u8> for Prec {
     fn from(num: u8) -> Self {
-        for p in Precedence::values() {
+        for p in Prec::values() {
             let prec: u8 = p.clone().into();
             if prec == num {
                 return p;
@@ -794,7 +792,7 @@ fn number(this: &mut Compiler, _can_assign: bool) {
     let value = this.scanner.copy_segment(start, end).convert();
 
     let index = this.make_constant(Value::Number(value));
-    this.emit_bytes(OpConstant as u8, index);
+    this.emit_bytes(Op::Constant as u8, index);
 }
 
 /// Same logic for all binary operators such as plus, times etc.
@@ -816,18 +814,18 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
     this.expression_with_precedence(prec);
 
     match token {
-        And => this.emit_byte(OpAnd as u8),
-        BangEqual => this.emit_bytes(OpEqual as u8, OpNot as u8),
-        EqualEqual => this.emit_byte(OpEqual as u8),
-        Greater => this.emit_byte(OpGreater as u8),
-        GreaterEqual => this.emit_byte(OpGreaterEqual as u8),
-        Less => this.emit_bytes(OpGreaterEqual as u8, OpNot as u8),
-        LessEqual => this.emit_bytes(OpGreater as u8, OpNot as u8),
-        Minus => this.emit_byte(OpSubtract as u8),
-        Or => this.emit_byte(OpOr as u8),
-        Plus => this.emit_byte(OpAdd as u8),
-        Slash => this.emit_byte(OpDivide as u8),
-        Star => this.emit_byte(OpMultiply as u8),
+        And => this.emit_byte(Op::And as u8),
+        BangEqual => this.emit_bytes(Op::Equal as u8, Op::Not as u8),
+        EqualEqual => this.emit_byte(Op::Equal as u8),
+        Greater => this.emit_byte(Op::Greater as u8),
+        GreaterEqual => this.emit_byte(Op::GreaterEqual as u8),
+        Less => this.emit_bytes(Op::GreaterEqual as u8, Op::Not as u8),
+        LessEqual => this.emit_bytes(Op::Greater as u8, Op::Not as u8),
+        Minus => this.emit_byte(Op::Subtract as u8),
+        Or => this.emit_byte(Op::Or as u8),
+        Plus => this.emit_byte(Op::Add as u8),
+        Slash => this.emit_byte(Op::Divide as u8),
+        Star => this.emit_byte(Op::Multiply as u8),
         _ => this.error_at_current("Impossible binary operator. (this is an interpreter bug)"),
     }
 }
@@ -842,8 +840,8 @@ fn unary(this: &mut Compiler, _can_assign: bool) {
     this.expression_with_precedence(prec);
 
     match token {
-        Bang => this.emit_byte(OpNot as u8),
-        Minus => this.emit_byte(OpNegate as u8),
+        Bang => this.emit_byte(Op::Not as u8),
+        Minus => this.emit_byte(Op::Negate as u8),
         _ => this.error_at_current("Impossible unary operator. (this is an interpreter bug)"),
     }
 }
@@ -857,10 +855,10 @@ fn string(this: &mut Compiler, _can_assign: bool) {
     let start = this.parser.previous.start;
     let end = start + this.parser.previous.length;
     let value = this.scanner.copy_segment(start, end);
-    let value = this.vm.memory.allocate(ObjString(value));
+    let value = this.vm.memory.allocate(Object::String(value));
 
     let index = this.make_constant(Value::Object(value));
-    this.emit_bytes(OpConstant as u8, index);
+    this.emit_bytes(Op::Constant as u8, index);
 }
 
 fn literal(this: &mut Compiler, _can_assign: bool) {
@@ -872,7 +870,7 @@ fn literal(this: &mut Compiler, _can_assign: bool) {
         _ => panic!("Internal error: cannot make literal (this is a bug)."),
     };
 
-    this.emit_bytes(OpConstant as u8, index);
+    this.emit_bytes(Op::Constant as u8, index);
 }
 
 fn this_(this: &mut Compiler, _can_assign: bool) {
@@ -924,24 +922,24 @@ impl Function {
             let op = self.chunk.code.get(i).unwrap().into();
 
             i = match op {
-                OpAdd => self.graph_binary(i, &op),
-                OpAssert => self.graph_instruction(i, &op),
-                OpConstant => self.graph_unary(i, &op),
-                OpDefineGlobal => self.graph_instruction(i, &op),
-                OpNil => self.graph_instruction(i, &op),
-                OpPop => self.graph_instruction(i, &op),
-                OpPrint => self.graph_instruction(i, &op),
-                OpReturn => self.graph_instruction(i, &op),
-                OpNegate => self.graph_binary(i, &op),
-                OpNot => self.graph_unary(i, &op),
-                OpSubtract => self.graph_binary(i, &op),
-                OpAnd => self.graph_binary(i, &op),
-                OpDivide => self.graph_binary(i, &op),
-                OpEqual => self.graph_binary(i, &op),
-                OpGreater => self.graph_binary(i, &op),
-                OpGreaterEqual => self.graph_binary(i, &op),
-                OpOr => self.graph_binary(i, &op),
-                OpMultiply => self.graph_binary(i, &op),
+                Op::Add => self.graph_binary(i, &op),
+                Op::Assert => self.graph_instruction(i, &op),
+                Op::Constant => self.graph_unary(i, &op),
+                Op::DefineGlobal => self.graph_instruction(i, &op),
+                Op::Nil => self.graph_instruction(i, &op),
+                Op::Pop => self.graph_instruction(i, &op),
+                Op::Print => self.graph_instruction(i, &op),
+                Op::Return => self.graph_instruction(i, &op),
+                Op::Negate => self.graph_binary(i, &op),
+                Op::Not => self.graph_unary(i, &op),
+                Op::Subtract => self.graph_binary(i, &op),
+                Op::And => self.graph_binary(i, &op),
+                Op::Divide => self.graph_binary(i, &op),
+                Op::Equal => self.graph_binary(i, &op),
+                Op::Greater => self.graph_binary(i, &op),
+                Op::GreaterEqual => self.graph_binary(i, &op),
+                Op::Or => self.graph_binary(i, &op),
+                Op::Multiply => self.graph_binary(i, &op),
             }
         }
         eprintln!("}}");
@@ -986,6 +984,7 @@ impl Function {
 mod test {
 
     use super::*;
+    use crate::vm::LoxError::ScanError;
 
     fn compile_expression(expr: &str) -> (MemoryEntry, VM) {
         let mut vm = VM::default();
@@ -1016,13 +1015,13 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![OpNil as u8, OpDefineGlobal as u8, 0, OpReturn as u8]
+            vec![Op::Nil as u8, Op::DefineGlobal as u8, 0, Op::Return as u8]
         );
 
         assert_eq!(1, bytecode.chunk.constants.len());
 
-        if let Object(ptr) = bytecode.chunk.constants.get(0).unwrap() {
-            if let ObjString(s) = vm.memory.retrieve(ptr) {
+        if let Value::Object(ptr) = bytecode.chunk.constants.get(0).unwrap() {
+            if let Object::String(s) = vm.memory.retrieve(ptr) {
                 assert_eq!(**s, "x");
             } else {
                 panic!("expected memory to contian string variable name")
@@ -1039,7 +1038,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![OpConstant as u8, 0, OpPop as u8, OpReturn as u8]
+            vec![Op::Constant as u8, 0, Op::Pop as u8, Op::Return as u8]
         );
     }
 
@@ -1051,11 +1050,11 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpPrint as u8,
-                OpPop as u8,
-                OpReturn as u8
+                Op::Print as u8,
+                Op::Pop as u8,
+                Op::Return as u8
             ]
         );
     }
@@ -1068,11 +1067,11 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpPrint as u8,
-                OpPop as u8,
-                OpReturn as u8
+                Op::Print as u8,
+                Op::Pop as u8,
+                Op::Return as u8
             ]
         );
     }
@@ -1085,13 +1084,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpAdd as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Add as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1104,13 +1103,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpSubtract as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Subtract as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1123,13 +1122,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpMultiply as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Multiply as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1142,13 +1141,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpDivide as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Divide as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1161,11 +1160,11 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpNegate as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Negate as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1178,13 +1177,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpEqual as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Equal as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1197,13 +1196,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpGreater as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Greater as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1216,13 +1215,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpGreaterEqual as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::GreaterEqual as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1235,14 +1234,14 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpGreaterEqual as u8,
-                OpNot as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::GreaterEqual as u8,
+                Op::Not as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
@@ -1255,14 +1254,14 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                OpConstant as u8,
+                Op::Constant as u8,
                 0,
-                OpConstant as u8,
+                Op::Constant as u8,
                 1,
-                OpGreater as u8,
-                OpNot as u8,
-                OpPop as u8,
-                OpReturn as u8,
+                Op::Greater as u8,
+                Op::Not as u8,
+                Op::Pop as u8,
+                Op::Return as u8,
             ]
         );
     }
