@@ -1116,6 +1116,44 @@ mod test {
     }
 
     #[test]
+    fn multiply_two_numbers() {
+        let (bytecode, vm) = compile_expression("1*1;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpMultiply as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
+    fn divide_two_numbers() {
+        let (bytecode, vm) = compile_expression("1/1;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                OpConstant as u8,
+                0,
+                OpConstant as u8,
+                1,
+                OpDivide as u8,
+                OpPop as u8,
+                OpReturn as u8,
+            ]
+        );
+    }
+
+    #[test]
     fn negate_a_number() {
         let (bytecode, vm) = compile_expression("-1;");
         let bytecode = vm.memory.retrieve(&bytecode).as_function();

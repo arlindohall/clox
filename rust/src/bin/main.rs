@@ -53,7 +53,14 @@ impl Lox {
 
         prompt()?;
         for line in lock.lines() {
-            self.vm = self.vm.interpret(line?.as_str())?;
+            self.vm = match self.vm.interpret(line?.as_str()) {
+                // todo: have interpret return a value and print that value...
+                Ok(vm) => vm,
+                Err((vm, err)) => {
+                    println!("{}", err);
+                    vm
+                }
+            };
             prompt()?;
         }
 
@@ -70,7 +77,9 @@ impl Lox {
 
         file.read_to_string(&mut contents)?;
 
-        self.vm.interpret(contents.as_str()).unwrap();
+        if let Err((_vm, err)) = self.vm.interpret(contents.as_str()) {
+            println!("{}", err)
+        }
 
         Ok(())
     }

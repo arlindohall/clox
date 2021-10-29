@@ -149,12 +149,17 @@ impl VM {
     /// Compile the script or line of code into bytecode, then
     /// execute the bytecode, all in the context of the VM that
     /// is set up with [new](#method.new).
-    pub fn interpret(mut self, statement: &str) -> Result<VM, LoxErrorChain> {
+    pub fn interpret(mut self, statement: &str) -> Result<VM, (VM, LoxErrorChain)> {
         let compiler = Compiler::new(&mut self);
 
         // Pass in the VM that calls the compiler so that the
         // compiler can swap itself out for a child compiler
-        let function = compiler.compile(statement)?;
+        let function = match compiler.compile(statement) {
+            Ok(func) => func,
+            Err(e) => {
+                return Err((self, e));
+            }
+        };
 
         self.call(&function, 0);
         self.run();
@@ -201,9 +206,8 @@ impl VM {
                     match val {
                         Boolean(false) | Nil => {
                             self.runtime_error("Failed assertion");
-                            println!("{}", self.error_chain);
                             // todo: should this exit or just revert to top level?
-                            std::process::exit(3);
+                            panic!("Assertion failed: {}", self.error_chain)
                         }
                         _ => (),
                     }
@@ -270,6 +274,28 @@ impl VM {
                         self.runtime_error("Cannot subtract non-numbers")
                     }
                 }
+                OpMultiply => {
+                    // Popped in reverse order they were pushed, expecting a-b
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+
+                    if let (Number(a), Number(b)) = (a, b) {
+                        self.stack.push(Number(a * b))
+                    } else {
+                        self.runtime_error("Cannot multiply non-numbers")
+                    }
+                }
+                OpDivide => {
+                    // Popped in reverse order they were pushed, expecting a-b
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+
+                    if let (Number(a), Number(b)) = (a, b) {
+                        self.stack.push(Number(a / b))
+                    } else {
+                        self.runtime_error("Cannot divide non-numbers")
+                    }
+                }
                 OpAnd => {
                     let v1 = self.stack.pop().unwrap().as_boolean();
                     let v2 = self.stack.pop().unwrap().as_boolean();
@@ -311,10 +337,13 @@ impl VM {
                     } else {
                         self.runtime_error("Cannot compare two non-numbers.")
                     }
-                },
-                OpOr => todo!("logical or of two arguments"),
-                OpMultiply => todo!("multiply two numbers"),
-                OpDivide => todo!("divide two numbers"),
+                }
+                OpOr => {
+                    let v1 = self.stack.pop().unwrap().as_boolean();
+                    let v2 = self.stack.pop().unwrap().as_boolean();
+
+                    self.stack.push(Boolean(v1 || v2))
+                }
             }
         }
     }
@@ -430,7 +459,7 @@ mod test {
     fn run(statement: &str) {
         match VM::default().interpret(statement) {
             Ok(_) => (),
-            Err(e) => {
+            Err((_, e)) => {
                 println!("Error interpreting statement {}", e);
                 panic!()
             }
@@ -445,6 +474,12 @@ mod test {
     #[test]
     fn assert_at_runtime() {
         run("assert true;");
+    }
+
+    #[test]
+    #[should_panic]
+    fn assert_false() {
+        run("assert false;");
     }
 
     #[test]
@@ -486,6 +521,13 @@ mod test {
         run("assert ! (2 <= 1);
             assert 1 <= 1;
             assert 0 <= 1;"
+        );
+    }
+
+    #[test]
+    fn multiply_and_divide() {
+        run("assert 2 * 2 == 4;
+            assert 10 / 5 == 2;"
         );
     }
 }
