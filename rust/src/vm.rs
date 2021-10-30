@@ -450,8 +450,13 @@ impl Error for LoxErrorChain {}
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::compiler::{DEBUG_PRINT_CODE, DebugOutput};
 
     fn run(statement: &str) {
+        unsafe {
+            // Debug print in case the test fails, makes debugging easier
+            DEBUG_PRINT_CODE = DebugOutput::Table;
+        }
         match VM::default().interpret(statement) {
             Ok(_) => (),
             Err((_, e)) => {

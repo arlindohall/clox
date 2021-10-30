@@ -15,6 +15,10 @@ use loxvm::vm::VM;
 fn main() -> Result<(), Box<dyn Error>> {
     let lox = Lox { vm: VM::default() };
 
+    // todo: allow caller to set debug output here
+    // unsafe {
+    //     loxvm::compiler::DEBUG_PRINT_CODE = loxvm::compiler::DebugOutput::Table;
+    // }
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() == 1 {
         lox.repl()

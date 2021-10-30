@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::object::{Memory, MemoryEntry};
 
 /// Internal Lox value representation
@@ -33,5 +35,16 @@ impl Value {
 
     pub fn as_boolean(&self) -> bool {
         !matches!(self, Value::Nil | Value::Boolean(false))
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Number(n) => write!(f, "{}", n),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Object(_) => write!(f, "<ptr>"),
+            Value::Nil => write!(f, "nil"),
+        }
     }
 }

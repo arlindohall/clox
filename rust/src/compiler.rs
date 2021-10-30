@@ -11,13 +11,13 @@ use crate::vm::Op;
 use crate::vm::VM;
 
 #[allow(dead_code)]
-pub(crate) enum DebugOutput {
+pub enum DebugOutput {
     None,
     Table,
     GraphViz,
 }
 
-static DEBUG_PRINT_CODE: DebugOutput = DebugOutput::None;
+pub(crate) static mut DEBUG_PRINT_CODE: DebugOutput = DebugOutput::None;
 const UNINITIALIZED: isize = -1;
 
 /// Compiler used for a single function or script.
@@ -723,10 +723,12 @@ impl<'a> Compiler<'a> {
     fn end_compiler(mut self) -> Result<MemoryEntry, LoxErrorChain> {
         self.emit_return();
 
-        match DEBUG_PRINT_CODE {
-            DebugOutput::Table => self.function().disassemble_chunk(),
-            DebugOutput::GraphViz => self.function().graph_output_chunk(),
-            DebugOutput::None => (),
+        unsafe {
+            match DEBUG_PRINT_CODE {
+                DebugOutput::Table => self.function().disassemble_chunk(),
+                DebugOutput::GraphViz => self.function().graph_output_chunk(),
+                DebugOutput::None => (),
+            }
         }
 
         if self.scanner.error_chain.had_error() {
@@ -904,14 +906,48 @@ impl ConvertNumber for String {
 
 impl Function {
     fn disassemble_chunk(&self) {
-        // todo: disassemble constants as well
-        eprintln!("digraph chunk {{");
-        for (instruction, op) in self.chunk.code.iter().enumerate() {
-            let op = op.into();
-            self.print_instruction(instruction as u32, &op);
+        eprintln!(
+            "===== chunk {} =====",
+            if !self.name.is_empty() {
+                &self.name
+            } else {
+                "<script>"
+            }
+        );
+        let mut i = 0;
+        let mut line: usize = 0;
+
+        while i < self.chunk.code.len() {
+            let op = self.chunk.code.get(i).unwrap().into();
+            let this_line = self.chunk.lines.get(i).unwrap();
+            let line_part = if *this_line > line {
+                line = *this_line;
+                format!("{:<4}", this_line)
+            } else {
+                format!("{:<4}", "|")
+            };
+
+            i = match op {
+                Op::Add => self.print_instruction(i, line_part, &op),
+                Op::Assert => self.print_instruction(i, line_part, &op),
+                Op::Constant => self.print_unary(i, line_part, &op),
+                Op::DefineGlobal => self.print_unary(i, line_part, &op),
+                Op::Nil => self.print_instruction(i, line_part, &op),
+                Op::Pop => self.print_instruction(i, line_part, &op),
+                Op::Print => self.print_instruction(i, line_part, &op),
+                Op::Return => self.print_instruction(i, line_part, &op),
+                Op::Negate => self.print_instruction(i, line_part, &op),
+                Op::Not => self.print_instruction(i, line_part, &op),
+                Op::Subtract => self.print_instruction(i, line_part, &op),
+                Op::And => self.print_instruction(i, line_part, &op),
+                Op::Divide => self.print_instruction(i, line_part, &op),
+                Op::Equal => self.print_instruction(i, line_part, &op),
+                Op::Greater => self.print_instruction(i, line_part, &op),
+                Op::GreaterEqual => self.print_instruction(i, line_part, &op),
+                Op::Or => self.print_instruction(i, line_part, &op),
+                Op::Multiply => self.print_instruction(i, line_part, &op),
+            }
         }
-        eprintln!("}}");
-        todo!("output memory and code as graphviz")
     }
 
     fn graph_output_chunk(&self) {
@@ -922,54 +958,62 @@ impl Function {
             let op = self.chunk.code.get(i).unwrap().into();
 
             i = match op {
-                Op::Add => self.graph_binary(i, &op),
+                Op::Add => self.graph_instruction(i, &op),
                 Op::Assert => self.graph_instruction(i, &op),
                 Op::Constant => self.graph_unary(i, &op),
-                Op::DefineGlobal => self.graph_instruction(i, &op),
+                Op::DefineGlobal => self.graph_unary(i, &op),
                 Op::Nil => self.graph_instruction(i, &op),
                 Op::Pop => self.graph_instruction(i, &op),
                 Op::Print => self.graph_instruction(i, &op),
                 Op::Return => self.graph_instruction(i, &op),
-                Op::Negate => self.graph_binary(i, &op),
-                Op::Not => self.graph_unary(i, &op),
-                Op::Subtract => self.graph_binary(i, &op),
-                Op::And => self.graph_binary(i, &op),
-                Op::Divide => self.graph_binary(i, &op),
-                Op::Equal => self.graph_binary(i, &op),
-                Op::Greater => self.graph_binary(i, &op),
-                Op::GreaterEqual => self.graph_binary(i, &op),
-                Op::Or => self.graph_binary(i, &op),
-                Op::Multiply => self.graph_binary(i, &op),
+                Op::Negate => self.graph_instruction(i, &op),
+                Op::Not => self.graph_instruction(i, &op),
+                Op::Subtract => self.graph_instruction(i, &op),
+                Op::And => self.graph_instruction(i, &op),
+                Op::Divide => self.graph_instruction(i, &op),
+                Op::Equal => self.graph_instruction(i, &op),
+                Op::Greater => self.graph_instruction(i, &op),
+                Op::GreaterEqual => self.graph_instruction(i, &op),
+                Op::Or => self.graph_instruction(i, &op),
+                Op::Multiply => self.graph_instruction(i, &op),
             }
         }
-        eprintln!("}}");
+
+        eprintln!("}}")
     }
 
-    fn print_instruction(&self, instruction: u32, op: &Op) {
-        eprintln!("{}{:?};", instruction, op);
+    fn print_unary(&self, i: usize, line_part: String, op: &Op) -> usize {
+        // todo: graph the values instead of the pointer
+        let val = self.chunk.code.get(i + 1).unwrap();
+        let op = format!("{:?}", op);
+
+        eprintln!(
+            "{:04} {}{:16}{:4} '{}'",
+            i,
+            line_part,
+            op,
+            val,
+            self.chunk.constants.get(*val as usize).unwrap()
+        );
+        i + 2
+    }
+
+    fn print_instruction(&self, i: usize, line_part: String, op: &Op) -> usize {
+        eprintln!("{:04} {}{:?}", i, line_part, op);
+        i + 1
     }
 
     fn graph_unary(&self, i: usize, op: &Op) -> usize {
         // todo: graph the constant itself, not the pointer
         let c = self.chunk.code.get(i + 1).unwrap();
         let next: Op = self.chunk.code.get(i + 2).unwrap().into();
+
+        let c = self.chunk.constants.get(*c as usize).unwrap();
+
         eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
 
         i + 2
-    }
-
-    fn graph_binary(&self, i: usize, op: &Op) -> usize {
-        // todo: graph the values instead of the pointer
-        let v1 = self.chunk.code.get(i + 1).unwrap();
-        let v2 = self.chunk.code.get(i + 2).unwrap();
-        let next: Op = self.chunk.code.get(i + 3).unwrap().into();
-
-        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, v1);
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, v2);
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 3, next);
-
-        i + 3
     }
 
     fn graph_instruction(&self, i: usize, op: &Op) -> usize {
@@ -998,6 +1042,7 @@ mod test {
             }
         };
 
+        vm.memory.retrieve(&function).as_function().disassemble_chunk();
         (function, vm)
     }
 
@@ -1264,6 +1309,26 @@ mod test {
                 Op::Return as u8,
             ]
         );
+    }
+
+    #[test]
+    fn declare_variable() {
+        let (bytecode, vm) = compile_expression("var x;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![Op::Nil as u8, Op::DefineGlobal as u8, 0, Op::Return as u8,]
+        )
+    }
+
+    #[test]
+    fn compile_error_incomplete_var_expression() {
+        let (mut err, _vm) = compile_broken("var;");
+        let mut errors = err.errors();
+
+        assert!(matches!(errors.pop().unwrap(), ParseError { .. }));
+        assert!(matches!(errors.pop(), None));
     }
 
     #[test]
