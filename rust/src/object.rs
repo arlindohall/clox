@@ -94,17 +94,20 @@ impl Object {
     pub fn as_mut_function(&mut self) -> &mut Function {
         match self {
             Object::Function(f) => f,
-            _ => panic!("Internal error: expected lox function type."),
+            _ => panic!("Internal error: expected lox function type (this is a compiler bug)."),
         }
     }
     pub fn as_function(&self) -> &Function {
         match self {
             Object::Function(f) => f,
-            _ => panic!("Internal error: expected lox function type."),
+            _ => panic!("Internal error: expected lox function type (this is a compiler bug)."),
         }
     }
 
     pub(crate) fn as_string(&self) -> &String {
-        todo!()
+        match self {
+            Object::String(s) => s.as_ref(),
+            _ => panic!("Internal error: expected lox string type (this is a compiler bug).")
+        }
     }
 }

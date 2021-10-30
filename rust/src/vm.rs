@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -27,6 +28,7 @@ const MAX_FRAMES: usize = 265;
 #[derive(Debug)]
 pub struct VM {
     stack: Vec<Value>,
+    globals: HashMap<String, Value>,
 
     // todo: replace all pub with pub(crate) where possible
     pub memory: Memory,
@@ -134,6 +136,7 @@ impl Default for VM {
     fn default() -> Self {
         VM {
             stack: Vec::new(),
+            globals: HashMap::new(),
             memory: Memory::default(),
             ip: 0,
             frames: Vec::new(),
@@ -227,7 +230,17 @@ impl VM {
                     let constant = self.read_constant().clone();
                     self.stack.push(constant);
                 }
-                Op::DefineGlobal => todo!(),
+                Op::DefineGlobal => {
+                    let name = *self.read_byte();
+                    let name = self.current_closure()
+                        .chunk
+                        .constants
+                        .get(name as usize)
+                        .unwrap()
+                        .as_string(&self.memory)
+                        .clone();
+                    self.globals.insert(name, self.stack.pop().unwrap());
+                }
                 Op::Pop => {
                     self.stack.pop();
                 }
@@ -347,6 +360,11 @@ impl VM {
         let index = *self.read_byte() as usize;
         let frame = self.frames.last().unwrap();
         self.closure(frame).chunk.constants.get(index).unwrap()
+    }
+
+    fn current_closure(&self) -> &Function {
+        let frame = self.frames.last().unwrap();
+        self.memory.retrieve(&frame.closure).as_function()
     }
 
     fn closure(&self, frame: &CallFrame) -> &Function {
@@ -524,5 +542,10 @@ mod test {
     fn multiply_and_divide() {
         run("assert 2 * 2 == 4;
             assert 10 / 5 == 2;");
+    }
+
+    #[test]
+    fn define_and_reference_global_variable() {
+        run("var x = 10;");
     }
 }
