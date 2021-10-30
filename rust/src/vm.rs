@@ -450,7 +450,7 @@ impl Error for LoxErrorChain {}
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::compiler::{DEBUG_PRINT_CODE, DebugOutput};
+    use crate::compiler::{DebugOutput, DEBUG_PRINT_CODE};
 
     fn run(statement: &str) {
         unsafe {

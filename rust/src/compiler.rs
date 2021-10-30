@@ -1042,7 +1042,10 @@ mod test {
             }
         };
 
-        vm.memory.retrieve(&function).as_function().disassemble_chunk();
+        vm.memory
+            .retrieve(&function)
+            .as_function()
+            .disassemble_chunk();
         (function, vm)
     }
 
@@ -1319,6 +1322,23 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![Op::Nil as u8, Op::DefineGlobal as u8, 0, Op::Return as u8,]
+        )
+    }
+
+    #[test]
+    fn define_global_variable() {
+        let (bytecode, vm) = compile_expression("var x = 10;");
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                Op::Constant as u8,
+                1,
+                Op::DefineGlobal as u8,
+                0,
+                Op::Return as u8,
+            ]
         )
     }
 
