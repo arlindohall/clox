@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::object::{Memory, MemoryEntry};
+use crate::object::MemoryEntry;
 
 /// Internal Lox value representation
 ///
@@ -18,11 +18,12 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn as_string<'a>(&self, mem: &'a Memory) -> &'a String {
+
+    pub fn as_pointer(&self) -> MemoryEntry {
         if let Value::Object(ptr) = self {
-            mem.retrieve(ptr).as_string()
+            ptr.clone()
         } else {
-            panic!("Internall lox error (expected string type), this is a bug.")
+            panic!("Internal lox error (expected object), this is a bug.")
         }
     }
 

@@ -217,8 +217,12 @@ impl VM {
                     let v2 = self.stack.pop().unwrap();
 
                     if self.is_string(&v1) && self.is_string(&v2) {
-                        let string = self
-                            .concatenate(v1.as_string(&self.memory), v2.as_string(&self.memory));
+                        let v1 = v1.as_pointer();
+                        let v2 = v2.as_pointer();
+
+                        let v1 = self.memory.retrieve(&v1).as_string();
+                        let v2 = self.memory.retrieve(&v2).as_string();
+                        let string = self.concatenate(v1, v2);
                         self.stack.push(string)
                     } else if let (Some(n1), Some(n2)) = (v1.as_number(), v2.as_number()) {
                         self.stack.push(Value::Number(n1 + n2))
@@ -237,7 +241,10 @@ impl VM {
                         .constants
                         .get(name as usize)
                         .unwrap()
-                        .as_string(&self.memory)
+                        .as_pointer();
+                    let name = self.memory
+                        .retrieve(&name)
+                        .as_string()
                         .clone();
                     self.globals.insert(name, self.stack.pop().unwrap());
                 }
