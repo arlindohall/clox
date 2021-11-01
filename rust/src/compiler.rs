@@ -296,8 +296,8 @@ impl<'a> Compiler<'a> {
         self.emit_bytes(Op::DefineGlobal as u8, name);
     }
 
-    fn mark_initialized(&self) {
-        todo!("mark the current token/variable as initialized")
+    fn mark_initialized(&mut self) {
+        self.locals.last_mut().unwrap().depth = self.scope_depth;
     }
 
     fn consume(&mut self, token_type: TokenType, message: &str) {
@@ -346,7 +346,6 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        let name = &self.parser.previous;
 
         let mut error = false;
         for local in &self.locals {
@@ -356,23 +355,23 @@ impl<'a> Compiler<'a> {
                 break;
             }
 
-            if self.identifiers_equal(name, &local.name) {
+            if self.prev_identifier_equals(&local.name) {
                 error = true;
             }
         }
-        self.add_local(&name);
+        self.add_local();
 
         if error {
             self.error("Already a variable with this name in this scope.");
         }
     }
 
-    fn identifiers_equal(&self, first: &Token, second: &Token) -> bool {
-        if first.length != second.length {
+    fn prev_identifier_equals(&self, second: &Token) -> bool {
+        if self.parser.previous.length != second.length {
             false
         } else {
-            for ch in 0..first.length {
-                let ch1 = self.char_at(first.start + ch);
+            for ch in 0..self.parser.previous.length {
+                let ch1 = self.char_at(self.parser.previous.start + ch);
                 let ch2 = self.char_at(second.start + ch);
                 if ch1 != ch2 {
                     return false;
@@ -386,8 +385,20 @@ impl<'a> Compiler<'a> {
         self.scanner.source.get(ch).unwrap()
     }
 
-    fn add_local(&self, _name: &&Token) {
-        todo!("add a local variable to the current scope")
+    fn add_local(&mut self) {
+        let len = self.locals.len() as isize;
+        if len >= 256 {
+            self.error("Too many local variables.");
+        }
+
+        self.locals.push(Local {
+            // todo: is clone expensive here?
+            // Shouldn't matter because we're compiling
+            // but it would be nice to check
+            name: self.parser.previous.clone(),
+            depth: len,
+            is_captured: false,
+        })
     }
 
     fn identifier_constant(&mut self) -> u8 {
@@ -473,6 +484,19 @@ impl<'a> Compiler<'a> {
 
     fn end_scope(&mut self) {
         self.scope_depth -= 1;
+
+        // Now iterate through all the local variables and
+        // pop them from the stack if they're at this scope
+        loop {
+            if self.locals.len() == 0 {
+                return;
+            }
+            if self.locals.last().unwrap().depth <= self.scope_depth {
+                return;
+            }
+            self.emit_byte(Op::Pop as u8);
+            self.locals.pop();
+        }
     }
 
     fn expression_with_precedence(&mut self, precedence: Prec) {
@@ -1386,16 +1410,47 @@ mod test {
 
     #[test]
     fn simple_block_scope() {
-        let vm = compile_expression(
-            "{
+        let vm = compile_expression("
+            {
                 true;
-            }",
-        );
+            }
+        ");
         let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
             vec![Op::Constant as u8, 0, Op::Pop as u8, Op::Return as u8,]
+        )
+    }
+
+    #[test]
+    fn block_scope_locals() {
+        let vm = compile_expression("
+            var x = 10;
+            {
+                var x = 20;
+            }
+            {
+                var x = 30;
+            }
+        ");
+        let bytecode = function(&vm);
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                Op::Constant as u8,
+                1,
+                Op::DefineGlobal as u8,
+                0,
+                Op::Constant as u8,
+                2,
+                Op::Pop as u8,
+                Op::Constant as u8,
+                3,
+                Op::Pop as u8,
+                Op::Return as u8,
+            ]
         )
     }
 
