@@ -372,11 +372,10 @@ impl VM {
 
     pub fn read_constant(&mut self) -> &Value {
         let index = *self.read_byte() as usize;
-        let frame = self.frames.last().unwrap();
-        self.closure(frame).chunk.constants.get(index).unwrap()
+        self.current_closure().chunk.constants.get(index).unwrap()
     }
 
-    fn current_closure(&self) -> &Function {
+    pub(crate) fn current_closure(&self) -> &Function {
         let frame = self.frames.last().unwrap();
         self.memory.retrieve(&frame.closure).as_function()
     }
@@ -395,7 +394,12 @@ impl VM {
 
     pub fn line_number(&self) -> usize {
         let frame = self.frames.last().unwrap();
-        *self.closure(frame).chunk.lines.get(frame.ip - 1).unwrap()
+        *self
+            .current_closure()
+            .chunk
+            .lines
+            .get(frame.ip - 1)
+            .unwrap()
     }
 
     pub fn read_byte(&mut self) -> &u8 {

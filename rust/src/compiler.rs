@@ -427,7 +427,7 @@ impl<'a> Compiler<'a> {
 
     fn print_statement(&mut self) {
         self.expression();
-        self.consume(Semicolon, "Expect ';' after expression.");
+        self.consume(Semicolon, "Expect ';' after print statement.");
         self.emit_bytes(Op::Print as u8, Op::Pop as u8);
     }
 
@@ -459,16 +459,20 @@ impl<'a> Compiler<'a> {
         self.emit_byte(Op::Pop as u8);
     }
 
-    fn block(&self) {
-        todo!("compile a block")
+    fn block(&mut self) {
+        while !self.check(RightBrace) && !self.check(Eof) {
+            self.declaration()
+        }
+
+        self.consume(RightBrace, "Unmatched '{' results in unterminated block.")
     }
 
-    fn begin_scope(&self) {
-        todo!("begin a new scope")
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
     }
 
-    fn end_scope(&self) {
-        todo!("end a scope")
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
     }
 
     fn expression_with_precedence(&mut self, precedence: Prec) {
@@ -1044,23 +1048,24 @@ mod test {
     use super::*;
     use crate::vm::LoxError::ScanError;
 
-    fn compile_expression(expr: &str) -> (MemoryEntry, VM) {
+    fn function(vm: &VM) -> &Function {
+        vm.memory.retrieve(&crate::object::mem(0)).as_function()
+    }
+
+    fn compile_expression(expr: &str) -> VM {
         let mut vm = VM::default();
         let compiler = Compiler::new(&mut vm);
 
-        let function = match compiler.compile(expr) {
-            Ok(f) => f,
+        match compiler.compile(expr) {
+            Ok(_) => {
+                function(&vm).disassemble_chunk();
+                vm
+            }
             Err(e) => {
                 println!("Error in test: {}", e);
-                panic!()
+                panic!("Failing test: expected code to compile.")
             }
-        };
-
-        vm.memory
-            .retrieve(&function)
-            .as_function()
-            .disassemble_chunk();
-        (function, vm)
+        }
     }
 
     fn compile_broken(expr: &str) -> (LoxErrorChain, VM) {
@@ -1072,8 +1077,8 @@ mod test {
 
     #[test]
     fn compile_variable_declaration() {
-        let (bytecode, vm) = compile_expression("var x;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("var x;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1095,8 +1100,8 @@ mod test {
 
     #[test]
     fn compile_simple_integer_expression() {
-        let (bytecode, vm) = compile_expression("1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1106,8 +1111,8 @@ mod test {
 
     #[test]
     fn compile_print_expression() {
-        let (bytecode, vm) = compile_expression("print 1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("print 1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1123,8 +1128,8 @@ mod test {
 
     #[test]
     fn compile_print_string() {
-        let (bytecode, vm) = compile_expression("print \"hello\";");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("print \"hello\";");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1140,8 +1145,8 @@ mod test {
 
     #[test]
     fn add_two_numbers() {
-        let (bytecode, vm) = compile_expression("1+1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("1+1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1159,8 +1164,8 @@ mod test {
 
     #[test]
     fn subtract_two_numbers() {
-        let (bytecode, vm) = compile_expression("1-1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("1-1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1178,8 +1183,8 @@ mod test {
 
     #[test]
     fn multiply_two_numbers() {
-        let (bytecode, vm) = compile_expression("1*1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("1*1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1197,8 +1202,8 @@ mod test {
 
     #[test]
     fn divide_two_numbers() {
-        let (bytecode, vm) = compile_expression("1/1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("1/1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1216,8 +1221,8 @@ mod test {
 
     #[test]
     fn negate_a_number() {
-        let (bytecode, vm) = compile_expression("-1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("-1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1233,8 +1238,8 @@ mod test {
 
     #[test]
     fn compare_for_equality() {
-        let (bytecode, vm) = compile_expression("1 == 1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("1 == 1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1252,8 +1257,8 @@ mod test {
 
     #[test]
     fn greater_than_numbers() {
-        let (bytecode, vm) = compile_expression("2 > 1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("2 > 1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1271,8 +1276,8 @@ mod test {
 
     #[test]
     fn greater_than_equal_numbers() {
-        let (bytecode, vm) = compile_expression("2 >= 1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("2 >= 1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1290,8 +1295,8 @@ mod test {
 
     #[test]
     fn less_than_numbers() {
-        let (bytecode, vm) = compile_expression("2 < 1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("2 < 1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1310,8 +1315,8 @@ mod test {
 
     #[test]
     fn less_than_equal_numbers() {
-        let (bytecode, vm) = compile_expression("2 <= 1;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("2 <= 1;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1330,8 +1335,8 @@ mod test {
 
     #[test]
     fn declare_variable() {
-        let (bytecode, vm) = compile_expression("var x;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("var x;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1341,8 +1346,8 @@ mod test {
 
     #[test]
     fn define_global_variable() {
-        let (bytecode, vm) = compile_expression("var x = 10;");
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let vm = compile_expression("var x = 10;");
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1358,11 +1363,11 @@ mod test {
 
     #[test]
     fn define_and_reference_global_variable() {
-        let (bytecode, vm) = compile_expression(
+        let vm = compile_expression(
             "var x = 10;
             x;",
         );
-        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+        let bytecode = function(&vm);
 
         assert_eq!(
             bytecode.chunk.code,
@@ -1376,6 +1381,21 @@ mod test {
                 Op::Pop as u8,
                 Op::Return as u8,
             ]
+        )
+    }
+
+    #[test]
+    fn simple_block_scope() {
+        let vm = compile_expression(
+            "{
+                true;
+            }",
+        );
+        let bytecode = function(&vm);
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![Op::Constant as u8, 0, Op::Pop as u8, Op::Return as u8,]
         )
     }
 
