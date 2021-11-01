@@ -18,7 +18,6 @@ pub enum Value {
 }
 
 impl Value {
-
     pub fn as_pointer(&self) -> MemoryEntry {
         if let Value::Object(ptr) = self {
             ptr.clone()

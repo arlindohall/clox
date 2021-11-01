@@ -98,6 +98,20 @@ enum Prec {
     Primary,
 }
 
+const PRECS: [Prec; 11] = [
+    Prec::None,
+    Prec::Assignment,
+    Prec::Or,
+    Prec::And,
+    Prec::Equality,
+    Prec::Comparison,
+    Prec::Term,
+    Prec::Factor,
+    Prec::Unary,
+    Prec::Call,
+    Prec::Primary,
+];
+
 struct ParseRule {
     prefix_rule: Option<ParseFn>,
     infix_rule: Option<ParseFn>,
@@ -353,8 +367,23 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn identifiers_equal(&self, _first: &Token, _second: &Token) -> bool {
-        todo!("compare two tokens")
+    fn identifiers_equal(&self, first: &Token, second: &Token) -> bool {
+        if first.length != second.length {
+            false
+        } else {
+            for ch in 0..first.length {
+                let ch1 = self.char_at(first.start + ch);
+                let ch2 = self.char_at(second.start + ch);
+                if ch1 != ch2 {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+
+    fn char_at(&self, ch: usize) -> &char {
+        self.scanner.source.get(ch).unwrap()
     }
 
     fn add_local(&self, _name: &&Token) {
@@ -362,9 +391,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn identifier_constant(&mut self) -> u8 {
-        let start = self.parser.previous.start;
-        let end = self.parser.previous.length + self.parser.previous.start;
-        let obj_pointer = self.copy_string(start, end);
+        let obj_pointer = self.copy_string();
         self.make_constant(Value::Object(obj_pointer))
     }
 
@@ -686,8 +713,9 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn copy_string(&mut self, start: usize, end: usize) -> MemoryEntry {
-        let string = Object::String(self.scanner.copy_segment(start, end));
+    fn copy_string(&mut self) -> MemoryEntry {
+        let token = &self.parser.previous;
+        let string = Object::String(self.scanner.copy_segment(token));
         self.vm.memory.allocate(string)
     }
 
@@ -748,23 +776,16 @@ impl<'a> Compiler<'a> {
             .retrieve_mut(&self.function)
             .as_mut_function()
     }
-}
 
-impl Prec {
-    fn values() -> Vec<Prec> {
-        vec![
-            Prec::None,
-            Prec::Assignment,
-            Prec::Or,
-            Prec::And,
-            Prec::Equality,
-            Prec::Comparison,
-            Prec::Term,
-            Prec::Factor,
-            Prec::Unary,
-            Prec::Call,
-            Prec::Primary,
-        ]
+    fn named_variable(&mut self, can_assign: bool) {
+        // Global variable
+        let arg = self.identifier_constant();
+
+        if can_assign && self.match_(TokenType::Equal) {
+            self.emit_bytes(Op::SetGlobal as u8, arg);
+        } else {
+            self.emit_bytes(Op::GetGlobal as u8, arg);
+        }
     }
 }
 
@@ -776,22 +797,13 @@ impl From<Prec> for u8 {
 
 impl From<u8> for Prec {
     fn from(num: u8) -> Self {
-        for p in Prec::values() {
-            let prec: u8 = p.clone().into();
-            if prec == num {
-                return p;
-            }
-        }
-
-        panic!("Internal lox error: unable to match expression precedence.");
+        PRECS[num as usize].clone()
     }
 }
 
 /// Section: parse functions
 fn number(this: &mut Compiler, _can_assign: bool) {
-    let start = this.parser.previous.start;
-    let end = start + this.parser.previous.length;
-    let value = this.scanner.copy_segment(start, end).convert();
+    let value = this.scanner.copy_segment(&this.parser.previous).convert();
 
     let index = this.make_constant(Value::Number(value));
     this.emit_bytes(Op::Constant as u8, index);
@@ -854,9 +866,7 @@ fn grouping(this: &mut Compiler, _can_assign: bool) {
 }
 
 fn string(this: &mut Compiler, _can_assign: bool) {
-    let start = this.parser.previous.start;
-    let end = start + this.parser.previous.length;
-    let value = this.scanner.copy_segment(start, end);
+    let value = this.scanner.copy_segment(&this.parser.previous);
     let value = this.vm.memory.allocate(Object::String(value));
 
     let index = this.make_constant(Value::Object(value));
@@ -883,8 +893,8 @@ fn super_(this: &mut Compiler, _can_assign: bool) {
     todo!("Compile a super expression for {:?}", this)
 }
 
-fn variable(this: &mut Compiler, _can_assign: bool) {
-    todo!("Compile a variable expression for {:?}", this)
+fn variable(this: &mut Compiler, can_assign: bool) {
+    this.named_variable(can_assign);
 }
 
 fn dot(this: &mut Compiler, _can_assign: bool) {
@@ -932,6 +942,8 @@ impl Function {
                 Op::Assert => self.print_instruction(i, line_part, &op),
                 Op::Constant => self.print_unary(i, line_part, &op),
                 Op::DefineGlobal => self.print_unary(i, line_part, &op),
+                Op::GetGlobal => self.print_unary(i, line_part, &op),
+                Op::SetGlobal => self.print_unary(i, line_part, &op),
                 Op::Nil => self.print_instruction(i, line_part, &op),
                 Op::Pop => self.print_instruction(i, line_part, &op),
                 Op::Print => self.print_instruction(i, line_part, &op),
@@ -962,6 +974,8 @@ impl Function {
                 Op::Assert => self.graph_instruction(i, &op),
                 Op::Constant => self.graph_unary(i, &op),
                 Op::DefineGlobal => self.graph_unary(i, &op),
+                Op::GetGlobal => self.graph_unary(i, &op),
+                Op::SetGlobal => self.graph_unary(i, &op),
                 Op::Nil => self.graph_instruction(i, &op),
                 Op::Pop => self.graph_instruction(i, &op),
                 Op::Print => self.graph_instruction(i, &op),
@@ -1337,6 +1351,29 @@ mod test {
                 1,
                 Op::DefineGlobal as u8,
                 0,
+                Op::Return as u8,
+            ]
+        )
+    }
+
+    #[test]
+    fn define_and_reference_global_variable() {
+        let (bytecode, vm) = compile_expression(
+            "var x = 10;
+            x;",
+        );
+        let bytecode = vm.memory.retrieve(&bytecode).as_function();
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                Op::Constant as u8,
+                1,
+                Op::DefineGlobal as u8,
+                0,
+                Op::GetGlobal as u8,
+                2,
+                Op::Pop as u8,
                 Op::Return as u8,
             ]
         )

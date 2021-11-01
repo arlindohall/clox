@@ -66,6 +66,8 @@ pub enum Op {
     And,
     Constant,
     DefineGlobal,
+    GetGlobal,
+    SetGlobal,
     Divide,
     Equal,
     Greater,
@@ -81,6 +83,29 @@ pub enum Op {
     Subtract,
 }
 
+const OPS: [Op; 20] = [
+    Op::Assert,
+    Op::Add,
+    Op::And,
+    Op::Constant,
+    Op::DefineGlobal,
+    Op::GetGlobal,
+    Op::SetGlobal,
+    Op::Divide,
+    Op::Equal,
+    Op::Greater,
+    Op::GreaterEqual,
+    Op::Or,
+    Op::Pop,
+    Op::Multiply,
+    Op::Print,
+    Op::Nil,
+    Op::Negate,
+    Op::Not,
+    Op::Return,
+    Op::Subtract,
+];
+
 impl From<&Op> for u8 {
     fn from(op: &Op) -> u8 {
         op.clone() as u8
@@ -89,39 +114,7 @@ impl From<&Op> for u8 {
 
 impl From<&u8> for Op {
     fn from(op: &u8) -> Op {
-        for v in &Op::values() {
-            let val: u8 = v.into();
-            if val == *op {
-                return v.clone();
-            }
-        }
-
-        panic!("Impossible op {}", op)
-    }
-}
-
-impl Op {
-    pub(crate) fn values() -> Vec<Op> {
-        vec![
-            Op::Assert,
-            Op::Add,
-            Op::And,
-            Op::Constant,
-            Op::DefineGlobal,
-            Op::Divide,
-            Op::Equal,
-            Op::Greater,
-            Op::GreaterEqual,
-            Op::Or,
-            Op::Pop,
-            Op::Multiply,
-            Op::Print,
-            Op::Nil,
-            Op::Negate,
-            Op::Not,
-            Op::Return,
-            Op::Subtract,
-        ]
+        OPS[*op as usize].clone()
     }
 }
 
@@ -236,17 +229,31 @@ impl VM {
                 }
                 Op::DefineGlobal => {
                     let name = *self.read_byte();
-                    let name = self.current_closure()
+                    let name = self
+                        .current_closure()
                         .chunk
                         .constants
                         .get(name as usize)
                         .unwrap()
                         .as_pointer();
-                    let name = self.memory
-                        .retrieve(&name)
-                        .as_string()
-                        .clone();
+                    let name = self.memory.retrieve(&name).as_string().clone();
                     self.globals.insert(name, self.stack.pop().unwrap());
+                }
+                Op::GetGlobal => {
+                    let name = *self.read_byte() as usize;
+                    let name = self
+                        .current_closure()
+                        .chunk
+                        .constants
+                        .get(name)
+                        .unwrap()
+                        .as_pointer();
+                    let name = self.memory.retrieve(&name).as_string();
+
+                    self.stack.push(self.globals.get(name).unwrap().clone())
+                }
+                Op::SetGlobal => {
+                    todo!("update global constants table")
                 }
                 Op::Pop => {
                     self.stack.pop();
@@ -553,6 +560,7 @@ mod test {
 
     #[test]
     fn define_and_reference_global_variable() {
-        run("var x = 10;");
+        run("var x = 10;
+            assert x == 10;");
     }
 }

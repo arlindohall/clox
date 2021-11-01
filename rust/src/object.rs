@@ -59,7 +59,7 @@ impl Memory {
         self.memory.get(index).unwrap()
     }
 
-    fn intern(&mut self, string: Box<String>) -> MemoryEntry {
+    pub fn intern(&mut self, string: Box<String>) -> MemoryEntry {
         match self.strings.get(&string) {
             Some(m_loc) => m_loc.clone(),
             None => self.insert(Object::String(string)),
@@ -107,7 +107,7 @@ impl Object {
     pub(crate) fn as_string(&self) -> &String {
         match self {
             Object::String(s) => s.as_ref(),
-            _ => panic!("Internal error: expected lox string type (this is a compiler bug).")
+            _ => panic!("Internal error: expected lox string type (this is a compiler bug)."),
         }
     }
 }

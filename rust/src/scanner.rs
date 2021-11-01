@@ -117,7 +117,10 @@ impl Scanner {
         text.chars().collect()
     }
 
-    pub fn copy_segment(&self, start: usize, end: usize) -> Box<String> {
+    pub fn copy_segment(&self, token: &Token) -> Box<String> {
+        let start = token.start;
+        let end = start + token.length;
+
         Box::new(self.source[start..end].iter().collect())
     }
 
