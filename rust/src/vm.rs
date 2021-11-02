@@ -183,6 +183,7 @@ impl VM {
     }
 
     pub fn run(&mut self) {
+        self.debug_trace_function();
         loop {
             self.debug_trace();
             let op = self.read_byte();
@@ -425,23 +426,58 @@ impl VM {
         }
     }
 
+    fn debug_trace_function(&self) {
+        unsafe {
+            if !DEBUG_TRACE_EXECUTION {
+                return;
+            }
+        }
+
+        eprintln!(
+            "----- execute::{} -----",
+            if !self.current_closure().name.is_empty() {
+                &self.current_closure().name
+            } else {
+                "<script>"
+            }
+        );
+    }
+
     fn debug_trace(&self) {
         unsafe {
             if !DEBUG_TRACE_EXECUTION {
                 return;
             }
         }
+
         let ip = self.frames.last().unwrap().ip;
+
+        let line_part = self.get_line_part(ip);
+
         let op = *self.current_closure().chunk.code.get(ip).unwrap();
         let op = op.bytecode_name();
-        let op = format!("{:?}", op);
+
         let stack = self
             .stack
             .iter()
             .map(|v| format!("{}", v))
             .collect::<Vec<String>>()
             .join(", ");
-        eprintln!("{:06} {:16} {}", ip, op, stack);
+        eprintln!("{:04} {}{:16} {}", ip, line_part, op, stack);
+    }
+
+    fn get_line_part(&self, i: usize) -> String {
+        if i == 0 {
+            return format!("{:<4}", "|");
+        }
+
+        let line = *self.current_closure().chunk.lines.get(i - 1).unwrap();
+        let this_line = *self.current_closure().chunk.lines.get(i).unwrap();
+        if this_line > line {
+            format!("{:<4}", this_line)
+        } else {
+            format!("{:<4}", "|")
+        }
     }
 }
 

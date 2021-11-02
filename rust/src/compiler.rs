@@ -1,3 +1,4 @@
+use crate::debug::DisassembleInstruction;
 use crate::object::MemoryEntry;
 use crate::object::Object;
 use crate::scanner::Scanner;
@@ -960,17 +961,9 @@ impl Function {
             }
         );
         let mut i = 0;
-        let mut line: usize = 0;
 
         while i < self.chunk.code.len() {
             let op = *self.chunk.code.get(i).unwrap();
-            let this_line = self.chunk.lines.get(i).unwrap();
-            let line_part = if *this_line > line {
-                line = *this_line;
-                format!("{:<4}", this_line)
-            } else {
-                format!("{:<4}", "|")
-            };
 
             let action = match op {
                 op::ADD => Self::print_instruction,
@@ -998,7 +991,52 @@ impl Function {
                 22_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
-            i = action(self, i, line_part, op);
+            i = action(self, i, op.bytecode_name());
+        }
+    }
+
+    fn print_local(&self, i: usize, op: String) -> usize {
+        // todo: graph the values instead of the pointer
+        let val = self.chunk.code.get(i + 1).unwrap();
+        let line_part = self.get_line_part(i);
+
+        eprintln!("{:04} {}{:16}{:4}", i, line_part, op, val,);
+        i + 2
+    }
+
+    fn print_constant(&self, i: usize, op: String) -> usize {
+        // todo: graph the values instead of the pointer
+        let val = self.chunk.code.get(i + 1).unwrap();
+        let line_part = self.get_line_part(i);
+
+        eprintln!(
+            "{:04} {}{:16}{:4} '{}'",
+            i,
+            line_part,
+            op,
+            val,
+            self.chunk.constants.get(*val as usize).unwrap()
+        );
+        i + 2
+    }
+
+    fn print_instruction(&self, i: usize, op: String) -> usize {
+        let line_part = self.get_line_part(i);
+        eprintln!("{:04} {}{}", i, line_part, op);
+        i + 1
+    }
+
+    fn get_line_part(&self, i: usize) -> String {
+        if i == 0 {
+            return format!("{:<4}", "|");
+        }
+
+        let line = *self.chunk.lines.get(i - 1).unwrap();
+        let this_line = *self.chunk.lines.get(i).unwrap();
+        if this_line > line {
+            format!("{:<4}", this_line)
+        } else {
+            format!("{:<4}", "|")
         }
     }
 
@@ -1039,36 +1077,6 @@ impl Function {
         }
 
         eprintln!("}}")
-    }
-
-    fn print_local(&self, i: usize, line_part: String, op: u8) -> usize {
-        // todo: graph the values instead of the pointer
-        let val = self.chunk.code.get(i + 1).unwrap();
-        let op = format!("{:?}", op);
-
-        eprintln!("{:04} {}{:16}{:4}", i, line_part, op, val,);
-        i + 2
-    }
-
-    fn print_constant(&self, i: usize, line_part: String, op: u8) -> usize {
-        // todo: graph the values instead of the pointer
-        let val = self.chunk.code.get(i + 1).unwrap();
-        let op = format!("{:?}", op);
-
-        eprintln!(
-            "{:04} {}{:16}{:4} '{}'",
-            i,
-            line_part,
-            op,
-            val,
-            self.chunk.constants.get(*val as usize).unwrap()
-        );
-        i + 2
-    }
-
-    fn print_instruction(&self, i: usize, line_part: String, op: u8) -> usize {
-        eprintln!("{:04} {}{:?}", i, line_part, op);
-        i + 1
     }
 
     fn graph_local(&self, i: usize, op: u8) -> usize {
