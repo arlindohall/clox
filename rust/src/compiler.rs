@@ -1057,7 +1057,7 @@ impl Function {
         let val = self.chunk.code.get(i + 1).unwrap();
         let op = format!("{:?}", op);
 
-        eprintln!("{:04} {}{:16}{}", i, line_part, op, val,);
+        eprintln!("{:04} {}{:16}{:4}", i, line_part, op, val,);
         i + 2
     }
 

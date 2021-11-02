@@ -7,6 +7,7 @@ use crate::object::{Memory, MemoryEntry, Object};
 use crate::value::Value;
 
 const MAX_FRAMES: usize = 265;
+static mut DEBUG_TRACE_EXECUTION: bool = false;
 
 /// Lox Virtual Machine.
 ///
@@ -196,6 +197,8 @@ impl VM {
         loop {
             let op = self.read_byte().into();
 
+            self.debug_trace();
+
             match op {
                 Op::Assert => {
                     let val = self.stack.last().unwrap();
@@ -260,10 +263,19 @@ impl VM {
                     todo!("update global constants table")
                 }
                 Op::GetLocal => {
-                    todo!("reference a value further down the stack")
+                    let base = self.frames.last().unwrap().slots;
+                    let offset = *self.read_byte() as usize;
+                    let index = base + offset - 1;
+
+                    self.stack.push(self.stack.get(index).unwrap().clone())
                 }
                 Op::SetLocal => {
-                    todo!("modify a value some distance down the stack")
+                    let base = self.frames.last().unwrap().slots;
+                    let offset = *self.read_byte() as usize;
+                    let index = base + offset - 1;
+
+                    let new_value = self.stack.pop().unwrap();
+                    self.stack.insert(index, new_value)
                 }
                 Op::Pop => {
                     self.stack.pop();
@@ -390,10 +402,6 @@ impl VM {
         self.memory.retrieve(&frame.closure).as_function()
     }
 
-    fn closure(&self, frame: &CallFrame) -> &Function {
-        self.memory.retrieve(&frame.closure).as_function()
-    }
-
     pub fn concatenate(&self, str1: &str, str2: &str) -> Value {
         todo!(
             "concatenate two strings and intern the result ({}, {})",
@@ -413,9 +421,10 @@ impl VM {
     }
 
     pub fn read_byte(&mut self) -> &u8 {
+        let ip = self.frames.last().unwrap().ip;
         self.frames.last_mut().unwrap().ip += 1;
-        let frame = self.frames.last().unwrap();
-        self.closure(frame).chunk.code.get(frame.ip - 1).unwrap()
+
+        self.current_closure().chunk.code.get(ip).unwrap()
     }
 
     pub fn is_string(&self, value: &Value) -> bool {
@@ -425,6 +434,24 @@ impl VM {
             }
             _ => false,
         }
+    }
+
+    fn debug_trace(&self) {
+        unsafe {
+            if !DEBUG_TRACE_EXECUTION {
+                return;
+            }
+        }
+        let ip = &self.frames.last().unwrap().ip - 1;
+        let op: Op = self.current_closure().chunk.code.get(ip).unwrap().into();
+        let op = format!("{:?}", op);
+        let stack = self
+            .stack
+            .iter()
+            .map(|v| format!("{}", v))
+            .collect::<Vec<String>>()
+            .join(", ");
+        eprintln!("{:06} {:16} {}", ip, op, stack);
     }
 }
 
@@ -502,6 +529,7 @@ mod test {
         unsafe {
             // Debug print in case the test fails, makes debugging easier
             DEBUG_PRINT_CODE = DebugOutput::Table;
+            DEBUG_TRACE_EXECUTION = true;
         }
         match VM::default().interpret(statement) {
             Ok(_) => (),
@@ -575,6 +603,36 @@ mod test {
     #[test]
     fn define_and_reference_global_variable() {
         run("var x = 10;
+            assert x == 10;");
+    }
+
+    #[test]
+    fn local_variables_block_scoping() {
+        run("
+            var x = 10;
+            {
+                var x = 20;
+                assert x == 20;
+            }
+            assert x == 10;
+            {
+                var x = 30;
+                assert x == 30;
+            }
+        ");
+    }
+
+    #[test]
+    fn local_variables_get_and_set() {
+        run("
+            var x = 10;
+            {
+                var x;
+                assert x == nil;
+
+                x = 20;
+                assert x == 20;
+            }
             assert x == 10;");
     }
 }
