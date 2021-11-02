@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt::Display;
 
 use crate::compiler::{Compiler, Function};
+use crate::debug::DisassembleInstruction;
 use crate::object::{Memory, MemoryEntry, Object};
 use crate::value::Value;
 
@@ -59,68 +60,56 @@ pub struct LoxErrorChain {
     errors: Vec<LoxError>,
 }
 
-#[derive(Clone, Debug)]
-#[repr(u8)]
-pub enum Op {
-    Assert,
-    Add,
-    And,
-    Constant,
-    DefineGlobal,
-    GetGlobal,
-    SetGlobal,
-    GetLocal,
-    SetLocal,
-    Divide,
-    Equal,
-    Greater,
-    GreaterEqual,
-    Or,
-    Pop,
-    Multiply,
-    Print,
-    Nil,
-    Negate,
-    Not,
-    Return,
-    Subtract,
-}
-
-const OPS: [Op; 22] = [
-    Op::Assert,
-    Op::Add,
-    Op::And,
-    Op::Constant,
-    Op::DefineGlobal,
-    Op::GetGlobal,
-    Op::SetGlobal,
-    Op::GetLocal,
-    Op::SetLocal,
-    Op::Divide,
-    Op::Equal,
-    Op::Greater,
-    Op::GreaterEqual,
-    Op::Or,
-    Op::Pop,
-    Op::Multiply,
-    Op::Print,
-    Op::Nil,
-    Op::Negate,
-    Op::Not,
-    Op::Return,
-    Op::Subtract,
-];
-
-impl From<&Op> for u8 {
-    fn from(op: &Op) -> u8 {
-        op.clone() as u8
+pub mod op {
+    #[repr(u8)]
+    enum Op {
+        Add,
+        And,
+        Assert,
+        Constant,
+        DefineGlobal,
+        Divide,
+        Equal,
+        GetGlobal,
+        GetLocal,
+        Greater,
+        GreaterEqual,
+        Multiply,
+        Negate,
+        Nil,
+        Not,
+        Or,
+        Pop,
+        Print,
+        Return,
+        SetGlobal,
+        SetLocal,
+        Subtract,
     }
-}
+    use Op::*;
 
-impl From<&u8> for Op {
-    fn from(op: &u8) -> Op {
-        OPS[*op as usize].clone()
-    }
+    pub const ADD: u8 = Add as u8;
+    pub const AND: u8 = And as u8;
+    pub const ASSERT: u8 = Assert as u8;
+    pub const CONSTANT: u8 = Constant as u8;
+    pub const DEFINE_GLOBAL: u8 = DefineGlobal as u8;
+    pub const DIVIDE: u8 = Divide as u8;
+    pub const EQUAL: u8 = Equal as u8;
+    pub const GET_GLOBAL: u8 = GetGlobal as u8;
+    pub const GET_LOCAL: u8 = GetLocal as u8;
+    pub const GREATER: u8 = Greater as u8;
+    pub const GREATER_EQUAL: u8 = GreaterEqual as u8;
+    pub const MULTIPLY: u8 = Multiply as u8;
+    pub const NEGATE: u8 = Negate as u8;
+    pub const NIL: u8 = Nil as u8;
+    pub const NOT: u8 = Not as u8;
+    pub const OR: u8 = Or as u8;
+    pub const POP: u8 = Pop as u8;
+    pub const PRINT: u8 = Print as u8;
+    pub const RETURN: u8 = Return as u8;
+    pub const SET_GLOBAL: u8 = SetGlobal as u8;
+    pub const SET_LOCAL: u8 = SetLocal as u8;
+    pub const SUBTRACT: u8 = Subtract as u8;
 }
 
 /// I just did this because Clippy told me to.
@@ -195,12 +184,11 @@ impl VM {
 
     pub fn run(&mut self) {
         loop {
-            let op = self.read_byte().into();
-
             self.debug_trace();
+            let op = self.read_byte();
 
-            match op {
-                Op::Assert => {
+            match *op {
+                op::ASSERT => {
                     let val = self.stack.last().unwrap();
 
                     match val {
@@ -212,7 +200,7 @@ impl VM {
                         _ => (),
                     }
                 }
-                Op::Add => {
+                op::ADD => {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
 
@@ -230,11 +218,11 @@ impl VM {
                         self.runtime_error("Operands must be two numbers or two strings.")
                     }
                 }
-                Op::Constant => {
+                op::CONSTANT => {
                     let constant = self.read_constant().clone();
                     self.stack.push(constant);
                 }
-                Op::DefineGlobal => {
+                op::DEFINE_GLOBAL => {
                     let name = *self.read_byte();
                     let name = self
                         .current_closure()
@@ -246,7 +234,7 @@ impl VM {
                     let name = self.memory.retrieve(&name).as_string().clone();
                     self.globals.insert(name, self.stack.pop().unwrap());
                 }
-                Op::GetGlobal => {
+                op::GET_GLOBAL => {
                     let name = *self.read_byte() as usize;
                     let name = self
                         .current_closure()
@@ -259,17 +247,17 @@ impl VM {
 
                     self.stack.push(self.globals.get(name).unwrap().clone())
                 }
-                Op::SetGlobal => {
+                op::SET_GLOBAL => {
                     todo!("update global constants table")
                 }
-                Op::GetLocal => {
+                op::GET_LOCAL => {
                     let base = self.frames.last().unwrap().slots;
                     let offset = *self.read_byte() as usize;
                     let index = base + offset - 1;
 
                     self.stack.push(self.stack.get(index).unwrap().clone())
                 }
-                Op::SetLocal => {
+                op::SET_LOCAL => {
                     let base = self.frames.last().unwrap().slots;
                     let offset = *self.read_byte() as usize;
                     let index = base + offset - 1;
@@ -277,10 +265,10 @@ impl VM {
                     let new_value = self.stack.pop().unwrap();
                     self.stack.insert(index, new_value)
                 }
-                Op::Pop => {
+                op::POP => {
                     self.stack.pop();
                 }
-                Op::Print => {
+                op::PRINT => {
                     let val = self.stack.last().unwrap();
 
                     match val {
@@ -290,8 +278,8 @@ impl VM {
                         Value::Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
                     }
                 }
-                Op::Nil => self.stack.push(Value::Nil),
-                Op::Negate => {
+                op::NIL => self.stack.push(Value::Nil),
+                op::NEGATE => {
                     let val = self.stack.pop().unwrap();
 
                     match val {
@@ -299,17 +287,17 @@ impl VM {
                         _ => self.runtime_error("Cannot negate non-number."),
                     }
                 }
-                Op::Not => {
+                op::NOT => {
                     let val = self.stack.pop().unwrap();
 
                     let opposite = matches!(val, Value::Nil | Value::Boolean(false));
                     self.stack.push(Value::Boolean(opposite))
                 }
-                Op::Return => {
+                op::RETURN => {
                     // todo: return from function, for now no-op
                     return;
                 }
-                Op::Subtract => {
+                op::SUBTRACT => {
                     // Popped in reverse order they were pushed, expecting a-b
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
@@ -320,7 +308,7 @@ impl VM {
                         self.runtime_error("Cannot subtract non-numbers")
                     }
                 }
-                Op::Multiply => {
+                op::MULTIPLY => {
                     // Popped in reverse order they were pushed, expecting a-b
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
@@ -331,7 +319,7 @@ impl VM {
                         self.runtime_error("Cannot multiply non-numbers")
                     }
                 }
-                Op::Divide => {
+                op::DIVIDE => {
                     // Popped in reverse order they were pushed, expecting a-b
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
@@ -342,13 +330,13 @@ impl VM {
                         self.runtime_error("Cannot divide non-numbers")
                     }
                 }
-                Op::And => {
+                op::AND => {
                     let v1 = self.stack.pop().unwrap().as_boolean();
                     let v2 = self.stack.pop().unwrap().as_boolean();
 
                     self.stack.push(Value::Boolean(v1 && v2))
                 }
-                Op::Equal => {
+                op::EQUAL => {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
 
@@ -362,7 +350,7 @@ impl VM {
 
                     self.stack.push(Value::Boolean(equal))
                 }
-                Op::Greater => {
+                op::GREATER => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
 
@@ -372,7 +360,7 @@ impl VM {
                         self.runtime_error("Cannot compare two non-numbers.")
                     }
                 }
-                Op::GreaterEqual => {
+                op::GREATER_EQUAL => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
 
@@ -382,12 +370,13 @@ impl VM {
                         self.runtime_error("Cannot compare two non-numbers.")
                     }
                 }
-                Op::Or => {
+                op::OR => {
                     let v1 = self.stack.pop().unwrap().as_boolean();
                     let v2 = self.stack.pop().unwrap().as_boolean();
 
                     self.stack.push(Value::Boolean(v1 || v2))
                 }
+                b => panic!("Invalid bytecode {}", b),
             }
         }
     }
@@ -442,8 +431,9 @@ impl VM {
                 return;
             }
         }
-        let ip = &self.frames.last().unwrap().ip - 1;
-        let op: Op = self.current_closure().chunk.code.get(ip).unwrap().into();
+        let ip = self.frames.last().unwrap().ip;
+        let op = *self.current_closure().chunk.code.get(ip).unwrap();
+        let op = op.bytecode_name();
         let op = format!("{:?}", op);
         let stack = self
             .stack

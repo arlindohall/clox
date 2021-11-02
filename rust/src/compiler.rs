@@ -5,9 +5,9 @@ use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::scanner::TokenType::*;
 use crate::value::Value;
+use crate::vm::op;
 use crate::vm::LoxError::ParseError;
 use crate::vm::LoxErrorChain;
-use crate::vm::Op;
 use crate::vm::VM;
 
 #[allow(dead_code)]
@@ -83,39 +83,42 @@ pub(crate) struct Chunk {
     pub(crate) constants: Vec<Value>,
 }
 
-#[derive(Debug, Clone)]
-enum Prec {
-    None,
-    Assignment,
-    Or,
-    And,
-    Equality,
-    Comparison,
-    Term,
-    Factor,
-    Unary,
-    Call,
-    Primary,
-}
+// todo: remove this when all operations have been fixed
+#[allow(dead_code)]
+pub mod prec {
+    #[repr(usize)]
+    enum Prec {
+        None,
+        Assignment,
+        Or,
+        And,
+        Equality,
+        Comparison,
+        Term,
+        Factor,
+        Unary,
+        Call,
+        Primary,
+    }
+    use Prec::*;
 
-const PRECS: [Prec; 11] = [
-    Prec::None,
-    Prec::Assignment,
-    Prec::Or,
-    Prec::And,
-    Prec::Equality,
-    Prec::Comparison,
-    Prec::Term,
-    Prec::Factor,
-    Prec::Unary,
-    Prec::Call,
-    Prec::Primary,
-];
+    pub const NONE: usize = None as usize;
+    pub const ASSIGNMENT: usize = Assignment as usize;
+    pub const OR: usize = Or as usize;
+    pub const AND: usize = And as usize;
+    pub const EQUALITY: usize = Equality as usize;
+    pub const COMPARISON: usize = Comparison as usize;
+    pub const TERM: usize = Term as usize;
+    pub const FACTOR: usize = Factor as usize;
+    pub const UNARY: usize = Unary as usize;
+    pub const CALL: usize = Call as usize;
+    pub const PRIMARY: usize = Primary as usize;
+}
 
 struct ParseRule {
     prefix_rule: Option<ParseFn>,
     infix_rule: Option<ParseFn>,
-    precedence: Prec,
+    precedence: usize,
 }
 
 type ParseFn = fn(&mut Compiler, bool);
@@ -266,8 +269,8 @@ impl<'a> Compiler<'a> {
     /// Constants:
     ///     1: "x"
     /// Code:
-    ///     Op::Nil
-    ///     Op::DefineGlobal
+    ///     op::Nil
+    ///     op::DefineGlobal
     ///     1
     /// ```
     fn var_declaration(&mut self) {
@@ -276,7 +279,7 @@ impl<'a> Compiler<'a> {
         if self.match_(Equal) {
             self.expression();
         } else {
-            self.emit_byte(Op::Nil as u8);
+            self.emit_byte(op::NIL);
         }
         self.consume(Semicolon, "Expect ';' after variable declaration.");
 
@@ -293,7 +296,7 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        self.emit_bytes(Op::DefineGlobal as u8, name);
+        self.emit_bytes(op::DEFINE_GLOBAL, name);
     }
 
     fn mark_initialized(&mut self) {
@@ -310,7 +313,7 @@ impl<'a> Compiler<'a> {
 
     fn expression(&mut self) {
         // Called parsePrecedence in the book
-        self.expression_with_precedence(Prec::Assignment);
+        self.expression_with_precedence(prec::ASSIGNMENT);
     }
 
     fn emit_bytes(&mut self, op1: u8, op2: u8) {
@@ -325,7 +328,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_return(&mut self) {
-        self.emit_byte(Op::Return as u8)
+        self.emit_byte(op::RETURN)
     }
 
     fn parse_variable(&mut self, message: &str) -> u8 {
@@ -438,13 +441,13 @@ impl<'a> Compiler<'a> {
     fn print_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after print statement.");
-        self.emit_bytes(Op::Print as u8, Op::Pop as u8);
+        self.emit_bytes(op::PRINT, op::POP);
     }
 
     fn assert_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after assertion statement.");
-        self.emit_bytes(Op::Assert as u8, Op::Pop as u8);
+        self.emit_bytes(op::ASSERT, op::POP);
     }
 
     fn for_statement(&self) {
@@ -466,7 +469,7 @@ impl<'a> Compiler<'a> {
     fn epxression_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after expression.");
-        self.emit_byte(Op::Pop as u8);
+        self.emit_byte(op::POP);
     }
 
     fn block(&mut self) {
@@ -493,24 +496,24 @@ impl<'a> Compiler<'a> {
             if self.locals.last().unwrap().depth <= self.scope_depth {
                 return;
             }
-            self.emit_byte(Op::Pop as u8);
+            self.emit_byte(op::POP);
             self.locals.pop();
         }
     }
 
-    fn expression_with_precedence(&mut self, precedence: Prec) {
-        let precedence: u8 = precedence.into();
+    fn expression_with_precedence(&mut self, precedence: usize) {
+        let precedence = precedence;
         self.advance();
 
         let prefix_rule: Option<ParseFn> = self.previous_rule().prefix_rule;
-        let can_assign = precedence <= Prec::Assignment.into();
+        let can_assign = precedence <= prec::ASSIGNMENT;
 
         match prefix_rule {
             Some(rule) => rule(self, can_assign),
             None => self.error("Expect expression."),
         }
 
-        while precedence <= self.current_rule().precedence.into() {
+        while precedence <= self.current_rule().precedence {
             self.advance();
             if let Some(infix_rule) = self.previous_rule().infix_rule {
                 infix_rule(self, can_assign);
@@ -535,207 +538,207 @@ impl<'a> Compiler<'a> {
             And => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::And,
+                precedence: prec::AND,
             },
             Assert => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Bang => ParseRule {
                 prefix_rule: Some(unary),
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             BangEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Equality,
+                precedence: prec::EQUALITY,
             },
             Class => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Comma => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Dot => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(dot),
-                precedence: Prec::Call,
+                precedence: prec::CALL,
             },
             Else => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Eof => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Equal => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             EqualEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Equality,
+                precedence: prec::EQUALITY,
             },
             Error => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             False => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: Prec::Primary,
+                precedence: prec::PRIMARY,
             },
             For => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Fun => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Greater => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Equality,
+                precedence: prec::EQUALITY,
             },
             GreaterEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Equality,
+                precedence: prec::EQUALITY,
             },
             Identifier => ParseRule {
                 prefix_rule: Some(variable),
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             If => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             LeftBrace => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             LeftParen => ParseRule {
                 prefix_rule: Some(grouping),
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Less => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Equality,
+                precedence: prec::EQUALITY,
             },
             LessEqual => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Equality,
+                precedence: prec::EQUALITY,
             },
             Minus => ParseRule {
                 prefix_rule: Some(unary),
                 infix_rule: Some(binary),
-                precedence: Prec::Term,
+                precedence: prec::TERM,
             },
             TokenNil => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             TokenNumber => ParseRule {
                 prefix_rule: Some(number),
                 infix_rule: None,
-                precedence: Prec::Assignment,
+                precedence: prec::ASSIGNMENT,
             },
             Or => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Or,
+                precedence: prec::OR,
             },
             Plus => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Term,
+                precedence: prec::TERM,
             },
             Print => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Return => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             RightBrace => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             RightParen => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Semicolon => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             Slash => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Factor,
+                precedence: prec::FACTOR,
             },
             Star => ParseRule {
                 prefix_rule: None,
                 infix_rule: Some(binary),
-                precedence: Prec::Factor,
+                precedence: prec::FACTOR,
             },
             TokenString => ParseRule {
                 prefix_rule: Some(string),
                 infix_rule: None,
-                precedence: Prec::Assignment,
+                precedence: prec::ASSIGNMENT,
             },
             Super => ParseRule {
                 prefix_rule: Some(super_),
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             This => ParseRule {
                 prefix_rule: Some(this_),
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             True => ParseRule {
                 prefix_rule: Some(literal),
                 infix_rule: None,
-                precedence: Prec::Primary,
+                precedence: prec::PRIMARY,
             },
             Var => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
             While => ParseRule {
                 prefix_rule: None,
                 infix_rule: None,
-                precedence: Prec::None,
+                precedence: prec::NONE,
             },
         }
     }
@@ -810,9 +813,9 @@ impl<'a> Compiler<'a> {
         if arg > 0 && self.match_(TokenType::Equal) {
             // UNINITIALIZED (-1) is the only negative value
             self.expression();
-            return self.emit_bytes(Op::SetLocal as u8, arg as u8);
+            return self.emit_bytes(op::SET_LOCAL, arg as u8);
         } else if arg > 0 {
-            return self.emit_bytes(Op::GetLocal as u8, arg as u8);
+            return self.emit_bytes(op::GET_LOCAL, arg as u8);
         }
 
         // Global variable
@@ -820,9 +823,9 @@ impl<'a> Compiler<'a> {
 
         if can_assign && self.match_(TokenType::Equal) {
             self.expression();
-            self.emit_bytes(Op::SetGlobal as u8, arg)
+            self.emit_bytes(op::SET_GLOBAL, arg)
         } else {
-            self.emit_bytes(Op::GetGlobal as u8, arg)
+            self.emit_bytes(op::GET_GLOBAL, arg)
         }
     }
 
@@ -837,24 +840,12 @@ impl<'a> Compiler<'a> {
     }
 }
 
-impl From<Prec> for u8 {
-    fn from(prec: Prec) -> Self {
-        prec as u8
-    }
-}
-
-impl From<u8> for Prec {
-    fn from(num: u8) -> Self {
-        PRECS[num as usize].clone()
-    }
-}
-
 /// Section: parse functions
 fn number(this: &mut Compiler, _can_assign: bool) {
     let value = this.scanner.copy_segment(&this.parser.previous).convert();
 
     let index = this.make_constant(Value::Number(value));
-    this.emit_bytes(Op::Constant as u8, index);
+    this.emit_bytes(op::CONSTANT, index);
 }
 
 /// Same logic for all binary operators such as plus, times etc.
@@ -869,25 +860,23 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
     // To safely call this, you must guarantee that there are
     // no parse rules that produce binary with the highest
     // precedence (PrecPrimary)
-    let mut uprec: u8 = rule.precedence.into();
-    uprec += 1;
-    let prec = uprec.into();
+    let prec = rule.precedence + 1;
 
     this.expression_with_precedence(prec);
 
     match token {
-        And => this.emit_byte(Op::And as u8),
-        BangEqual => this.emit_bytes(Op::Equal as u8, Op::Not as u8),
-        EqualEqual => this.emit_byte(Op::Equal as u8),
-        Greater => this.emit_byte(Op::Greater as u8),
-        GreaterEqual => this.emit_byte(Op::GreaterEqual as u8),
-        Less => this.emit_bytes(Op::GreaterEqual as u8, Op::Not as u8),
-        LessEqual => this.emit_bytes(Op::Greater as u8, Op::Not as u8),
-        Minus => this.emit_byte(Op::Subtract as u8),
-        Or => this.emit_byte(Op::Or as u8),
-        Plus => this.emit_byte(Op::Add as u8),
-        Slash => this.emit_byte(Op::Divide as u8),
-        Star => this.emit_byte(Op::Multiply as u8),
+        And => this.emit_byte(op::AND),
+        BangEqual => this.emit_bytes(op::EQUAL, op::NOT),
+        EqualEqual => this.emit_byte(op::EQUAL),
+        Greater => this.emit_byte(op::GREATER),
+        GreaterEqual => this.emit_byte(op::GREATER_EQUAL),
+        Less => this.emit_bytes(op::GREATER_EQUAL, op::NOT),
+        LessEqual => this.emit_bytes(op::GREATER, op::NOT),
+        Minus => this.emit_byte(op::SUBTRACT),
+        Or => this.emit_byte(op::OR),
+        Plus => this.emit_byte(op::ADD),
+        Slash => this.emit_byte(op::DIVIDE),
+        Star => this.emit_byte(op::MULTIPLY),
         _ => this.error_at_current("Impossible binary operator. (this is an interpreter bug)"),
     }
 }
@@ -895,15 +884,13 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
 fn unary(this: &mut Compiler, _can_assign: bool) {
     let token = this.parser.previous.type_.clone();
     let rule = this.get_rule(&token);
-    let mut uprec: u8 = rule.precedence.into();
-    uprec += 1;
-    let prec = uprec.into();
+    let prec = rule.precedence + 1;
 
     this.expression_with_precedence(prec);
 
     match token {
-        Bang => this.emit_byte(Op::Not as u8),
-        Minus => this.emit_byte(Op::Negate as u8),
+        Bang => this.emit_byte(op::NOT),
+        Minus => this.emit_byte(op::NEGATE),
         _ => this.error_at_current("Impossible unary operator. (this is an interpreter bug)"),
     }
 }
@@ -918,7 +905,7 @@ fn string(this: &mut Compiler, _can_assign: bool) {
     let value = this.vm.memory.allocate(Object::String(value));
 
     let index = this.make_constant(Value::Object(value));
-    this.emit_bytes(Op::Constant as u8, index);
+    this.emit_bytes(op::CONSTANT, index);
 }
 
 fn literal(this: &mut Compiler, _can_assign: bool) {
@@ -930,7 +917,7 @@ fn literal(this: &mut Compiler, _can_assign: bool) {
         _ => panic!("Internal error: cannot make literal (this is a bug)."),
     };
 
-    this.emit_bytes(Op::Constant as u8, index);
+    this.emit_bytes(op::CONSTANT, index);
 }
 
 fn this_(this: &mut Compiler, _can_assign: bool) {
@@ -976,7 +963,7 @@ impl Function {
         let mut line: usize = 0;
 
         while i < self.chunk.code.len() {
-            let op = self.chunk.code.get(i).unwrap().into();
+            let op = *self.chunk.code.get(i).unwrap();
             let this_line = self.chunk.lines.get(i).unwrap();
             let line_part = if *this_line > line {
                 line = *this_line;
@@ -986,31 +973,32 @@ impl Function {
             };
 
             let action = match op {
-                Op::Add => Self::print_instruction,
-                Op::Assert => Self::print_instruction,
-                Op::Constant => Self::print_constant,
-                Op::DefineGlobal => Self::print_constant,
-                Op::GetGlobal => Self::print_constant,
-                Op::SetGlobal => Self::print_constant,
-                Op::GetLocal => Self::print_local,
-                Op::SetLocal => Self::print_local,
-                Op::Nil => Self::print_instruction,
-                Op::Pop => Self::print_instruction,
-                Op::Print => Self::print_instruction,
-                Op::Return => Self::print_instruction,
-                Op::Negate => Self::print_instruction,
-                Op::Not => Self::print_instruction,
-                Op::Subtract => Self::print_instruction,
-                Op::And => Self::print_instruction,
-                Op::Divide => Self::print_instruction,
-                Op::Equal => Self::print_instruction,
-                Op::Greater => Self::print_instruction,
-                Op::GreaterEqual => Self::print_instruction,
-                Op::Or => Self::print_instruction,
-                Op::Multiply => Self::print_instruction,
+                op::ADD => Self::print_instruction,
+                op::ASSERT => Self::print_instruction,
+                op::CONSTANT => Self::print_constant,
+                op::DEFINE_GLOBAL => Self::print_constant,
+                op::GET_GLOBAL => Self::print_constant,
+                op::SET_GLOBAL => Self::print_constant,
+                op::GET_LOCAL => Self::print_local,
+                op::SET_LOCAL => Self::print_local,
+                op::NIL => Self::print_instruction,
+                op::POP => Self::print_instruction,
+                op::PRINT => Self::print_instruction,
+                op::RETURN => Self::print_instruction,
+                op::NEGATE => Self::print_instruction,
+                op::NOT => Self::print_instruction,
+                op::SUBTRACT => Self::print_instruction,
+                op::AND => Self::print_instruction,
+                op::DIVIDE => Self::print_instruction,
+                op::EQUAL => Self::print_instruction,
+                op::GREATER => Self::print_instruction,
+                op::GREATER_EQUAL => Self::print_instruction,
+                op::OR => Self::print_instruction,
+                op::MULTIPLY => Self::print_instruction,
+                22_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
-            i = action(self, i, line_part, &op);
+            i = action(self, i, line_part, op);
         }
     }
 
@@ -1019,40 +1007,41 @@ impl Function {
         let mut i = 0;
 
         while i < self.chunk.code.len() - 1 {
-            let op = self.chunk.code.get(i).unwrap().into();
+            let op = *self.chunk.code.get(i).unwrap();
 
             let action = match op {
-                Op::Add => Self::graph_instruction,
-                Op::Assert => Self::graph_instruction,
-                Op::Constant => Self::graph_constant,
-                Op::DefineGlobal => Self::graph_constant,
-                Op::GetGlobal => Self::graph_constant,
-                Op::SetGlobal => Self::graph_constant,
-                Op::GetLocal => Self::graph_local,
-                Op::SetLocal => Self::graph_local,
-                Op::Nil => Self::graph_instruction,
-                Op::Pop => Self::graph_instruction,
-                Op::Print => Self::graph_instruction,
-                Op::Return => Self::graph_instruction,
-                Op::Negate => Self::graph_instruction,
-                Op::Not => Self::graph_instruction,
-                Op::Subtract => Self::graph_instruction,
-                Op::And => Self::graph_instruction,
-                Op::Divide => Self::graph_instruction,
-                Op::Equal => Self::graph_instruction,
-                Op::Greater => Self::graph_instruction,
-                Op::GreaterEqual => Self::graph_instruction,
-                Op::Or => Self::graph_instruction,
-                Op::Multiply => Self::graph_instruction,
+                op::ADD => Self::graph_instruction,
+                op::ASSERT => Self::graph_instruction,
+                op::CONSTANT => Self::graph_constant,
+                op::DEFINE_GLOBAL => Self::graph_constant,
+                op::GET_GLOBAL => Self::graph_constant,
+                op::SET_GLOBAL => Self::graph_constant,
+                op::GET_LOCAL => Self::graph_local,
+                op::SET_LOCAL => Self::graph_local,
+                op::NIL => Self::graph_instruction,
+                op::POP => Self::graph_instruction,
+                op::PRINT => Self::graph_instruction,
+                op::RETURN => Self::graph_instruction,
+                op::NEGATE => Self::graph_instruction,
+                op::NOT => Self::graph_instruction,
+                op::SUBTRACT => Self::graph_instruction,
+                op::AND => Self::graph_instruction,
+                op::DIVIDE => Self::graph_instruction,
+                op::EQUAL => Self::graph_instruction,
+                op::GREATER => Self::graph_instruction,
+                op::GREATER_EQUAL => Self::graph_instruction,
+                op::OR => Self::graph_instruction,
+                op::MULTIPLY => Self::graph_instruction,
+                22_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
-            i = action(self, i, &op);
+            i = action(self, i, op);
         }
 
         eprintln!("}}")
     }
 
-    fn print_local(&self, i: usize, line_part: String, op: &Op) -> usize {
+    fn print_local(&self, i: usize, line_part: String, op: u8) -> usize {
         // todo: graph the values instead of the pointer
         let val = self.chunk.code.get(i + 1).unwrap();
         let op = format!("{:?}", op);
@@ -1061,7 +1050,7 @@ impl Function {
         i + 2
     }
 
-    fn print_constant(&self, i: usize, line_part: String, op: &Op) -> usize {
+    fn print_constant(&self, i: usize, line_part: String, op: u8) -> usize {
         // todo: graph the values instead of the pointer
         let val = self.chunk.code.get(i + 1).unwrap();
         let op = format!("{:?}", op);
@@ -1077,15 +1066,15 @@ impl Function {
         i + 2
     }
 
-    fn print_instruction(&self, i: usize, line_part: String, op: &Op) -> usize {
+    fn print_instruction(&self, i: usize, line_part: String, op: u8) -> usize {
         eprintln!("{:04} {}{:?}", i, line_part, op);
         i + 1
     }
 
-    fn graph_local(&self, i: usize, op: &Op) -> usize {
+    fn graph_local(&self, i: usize, op: u8) -> usize {
         // todo: graph the constant itself, not the pointer
         let c = self.chunk.code.get(i + 1).unwrap();
-        let next: Op = self.chunk.code.get(i + 2).unwrap().into();
+        let next = self.chunk.code.get(i + 2).unwrap();
 
         eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
@@ -1093,10 +1082,10 @@ impl Function {
         i + 2
     }
 
-    fn graph_constant(&self, i: usize, op: &Op) -> usize {
+    fn graph_constant(&self, i: usize, op: u8) -> usize {
         // todo: graph the constant itself, not the pointer
         let c = self.chunk.code.get(i + 1).unwrap();
-        let next: Op = self.chunk.code.get(i + 2).unwrap().into();
+        let next = self.chunk.code.get(i + 2).unwrap();
 
         let c = self.chunk.constants.get(*c as usize).unwrap();
 
@@ -1106,8 +1095,8 @@ impl Function {
         i + 2
     }
 
-    fn graph_instruction(&self, i: usize, op: &Op) -> usize {
-        let next: Op = self.chunk.code.get(i + 1).unwrap().into();
+    fn graph_instruction(&self, i: usize, op: u8) -> usize {
+        let next = self.chunk.code.get(i + 1).unwrap();
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 1, next);
 
         i + 1
@@ -1154,7 +1143,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![Op::Nil as u8, Op::DefineGlobal as u8, 0, Op::Return as u8]
+            vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
         );
 
         assert_eq!(1, bytecode.chunk.constants.len());
@@ -1177,7 +1166,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![Op::Constant as u8, 0, Op::Pop as u8, Op::Return as u8]
+            vec![op::CONSTANT, 0, op::POP, op::RETURN]
         );
     }
 
@@ -1188,13 +1177,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![
-                Op::Constant as u8,
-                0,
-                Op::Print as u8,
-                Op::Pop as u8,
-                Op::Return as u8
-            ]
+            vec![op::CONSTANT, 0, op::PRINT, op::POP, op::RETURN]
         );
     }
 
@@ -1205,13 +1188,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![
-                Op::Constant as u8,
-                0,
-                Op::Print as u8,
-                Op::Pop as u8,
-                Op::Return as u8
-            ]
+            vec![op::CONSTANT, 0, op::PRINT, op::POP, op::RETURN]
         );
     }
 
@@ -1223,13 +1200,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::Add as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::ADD,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1242,13 +1219,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::Subtract as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::SUBTRACT,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1261,13 +1238,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::Multiply as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::MULTIPLY,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1280,13 +1257,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::Divide as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::DIVIDE,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1298,13 +1275,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![
-                Op::Constant as u8,
-                0,
-                Op::Negate as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
-            ]
+            vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::RETURN]
         );
     }
 
@@ -1316,13 +1287,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::Equal as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::EQUAL,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1335,13 +1306,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::Greater as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::GREATER,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1354,13 +1325,13 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::GreaterEqual as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::GREATER_EQUAL,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1373,14 +1344,14 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::GreaterEqual as u8,
-                Op::Not as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::GREATER_EQUAL,
+                op::NOT,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1393,14 +1364,14 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::Greater as u8,
-                Op::Not as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::GREATER,
+                op::NOT,
+                op::POP,
+                op::RETURN,
             ]
         );
     }
@@ -1412,7 +1383,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![Op::Nil as u8, Op::DefineGlobal as u8, 0, Op::Return as u8,]
+            vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
         )
     }
 
@@ -1423,13 +1394,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![
-                Op::Constant as u8,
-                1,
-                Op::DefineGlobal as u8,
-                0,
-                Op::Return as u8,
-            ]
+            vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::RETURN]
         )
     }
 
@@ -1444,14 +1409,14 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::DefineGlobal as u8,
+                op::DEFINE_GLOBAL,
                 0,
-                Op::GetGlobal as u8,
+                op::GET_GLOBAL,
                 2,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::POP,
+                op::RETURN,
             ]
         )
     }
@@ -1469,7 +1434,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![Op::Constant as u8, 0, Op::Pop as u8, Op::Return as u8,]
+            vec![op::CONSTANT, 0, op::POP, op::RETURN]
         )
     }
 
@@ -1491,17 +1456,17 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Constant as u8,
+                op::CONSTANT,
                 1,
-                Op::DefineGlobal as u8,
+                op::DEFINE_GLOBAL,
                 0,
-                Op::Constant as u8,
+                op::CONSTANT,
                 2,
-                Op::Pop as u8,
-                Op::Constant as u8,
+                op::POP,
+                op::CONSTANT,
                 3,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::POP,
+                op::RETURN,
             ]
         )
     }
@@ -1522,17 +1487,17 @@ mod test {
         assert_eq!(
             bytecode.chunk.code,
             vec![
-                Op::Nil as u8,
-                Op::Constant as u8,
+                op::NIL,
+                op::CONSTANT,
                 0,
-                Op::SetLocal as u8,
+                op::SET_LOCAL,
                 1,
-                Op::Pop as u8,
-                Op::GetLocal as u8,
+                op::POP,
+                op::GET_LOCAL,
                 1,
-                Op::Pop as u8,
-                Op::Pop as u8,
-                Op::Return as u8,
+                op::POP,
+                op::POP,
+                op::RETURN,
             ]
         )
     }
