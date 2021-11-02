@@ -346,7 +346,6 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-
         let mut error = false;
         for local in &self.locals {
             if local.depth != UNINITIALIZED && local.depth < self.scope_depth {
@@ -366,13 +365,13 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn prev_identifier_equals(&self, second: &Token) -> bool {
-        if self.parser.previous.length != second.length {
+    fn prev_identifier_equals(&self, token: &Token) -> bool {
+        if self.parser.previous.length != token.length {
             false
         } else {
             for ch in 0..self.parser.previous.length {
                 let ch1 = self.char_at(self.parser.previous.start + ch);
-                let ch2 = self.char_at(second.start + ch);
+                let ch2 = self.char_at(token.start + ch);
                 if ch1 != ch2 {
                     return false;
                 }
@@ -488,7 +487,7 @@ impl<'a> Compiler<'a> {
         // Now iterate through all the local variables and
         // pop them from the stack if they're at this scope
         loop {
-            if self.locals.len() == 0 {
+            if self.locals.is_empty() {
                 return;
             }
             if self.locals.last().unwrap().depth <= self.scope_depth {
@@ -518,7 +517,7 @@ impl<'a> Compiler<'a> {
             }
         }
 
-        if (can_assign) && self.match_(Equal) {
+        if can_assign && self.match_(Equal) {
             self.error("Invalid assignment target.");
         }
     }
@@ -806,14 +805,35 @@ impl<'a> Compiler<'a> {
     }
 
     fn named_variable(&mut self, can_assign: bool) {
+        // Local variable
+        let arg: isize = self.resolve_local();
+        if arg > 0 && self.match_(TokenType::Equal) {
+            // UNINITIALIZED (-1) is the only negative value
+            self.expression();
+            return self.emit_bytes(Op::SetLocal as u8, arg as u8);
+        } else if arg > 0 {
+            return self.emit_bytes(Op::GetLocal as u8, arg as u8);
+        }
+
         // Global variable
         let arg = self.identifier_constant();
 
         if can_assign && self.match_(TokenType::Equal) {
-            self.emit_bytes(Op::SetGlobal as u8, arg);
+            self.expression();
+            self.emit_bytes(Op::SetGlobal as u8, arg)
         } else {
-            self.emit_bytes(Op::GetGlobal as u8, arg);
+            self.emit_bytes(Op::GetGlobal as u8, arg)
         }
+    }
+
+    fn resolve_local(&mut self) -> isize {
+        for (i, local) in self.locals.iter().enumerate() {
+            if self.prev_identifier_equals(&local.name) {
+                return (i + 1) as isize; // Always -1 or 1..256
+            }
+        }
+
+        UNINITIALIZED
     }
 }
 
@@ -965,28 +985,32 @@ impl Function {
                 format!("{:<4}", "|")
             };
 
-            i = match op {
-                Op::Add => self.print_instruction(i, line_part, &op),
-                Op::Assert => self.print_instruction(i, line_part, &op),
-                Op::Constant => self.print_unary(i, line_part, &op),
-                Op::DefineGlobal => self.print_unary(i, line_part, &op),
-                Op::GetGlobal => self.print_unary(i, line_part, &op),
-                Op::SetGlobal => self.print_unary(i, line_part, &op),
-                Op::Nil => self.print_instruction(i, line_part, &op),
-                Op::Pop => self.print_instruction(i, line_part, &op),
-                Op::Print => self.print_instruction(i, line_part, &op),
-                Op::Return => self.print_instruction(i, line_part, &op),
-                Op::Negate => self.print_instruction(i, line_part, &op),
-                Op::Not => self.print_instruction(i, line_part, &op),
-                Op::Subtract => self.print_instruction(i, line_part, &op),
-                Op::And => self.print_instruction(i, line_part, &op),
-                Op::Divide => self.print_instruction(i, line_part, &op),
-                Op::Equal => self.print_instruction(i, line_part, &op),
-                Op::Greater => self.print_instruction(i, line_part, &op),
-                Op::GreaterEqual => self.print_instruction(i, line_part, &op),
-                Op::Or => self.print_instruction(i, line_part, &op),
-                Op::Multiply => self.print_instruction(i, line_part, &op),
-            }
+            let action = match op {
+                Op::Add => Self::print_instruction,
+                Op::Assert => Self::print_instruction,
+                Op::Constant => Self::print_constant,
+                Op::DefineGlobal => Self::print_constant,
+                Op::GetGlobal => Self::print_constant,
+                Op::SetGlobal => Self::print_constant,
+                Op::GetLocal => Self::print_local,
+                Op::SetLocal => Self::print_local,
+                Op::Nil => Self::print_instruction,
+                Op::Pop => Self::print_instruction,
+                Op::Print => Self::print_instruction,
+                Op::Return => Self::print_instruction,
+                Op::Negate => Self::print_instruction,
+                Op::Not => Self::print_instruction,
+                Op::Subtract => Self::print_instruction,
+                Op::And => Self::print_instruction,
+                Op::Divide => Self::print_instruction,
+                Op::Equal => Self::print_instruction,
+                Op::Greater => Self::print_instruction,
+                Op::GreaterEqual => Self::print_instruction,
+                Op::Or => Self::print_instruction,
+                Op::Multiply => Self::print_instruction,
+            };
+
+            i = action(self, i, line_part, &op);
         }
     }
 
@@ -997,34 +1021,47 @@ impl Function {
         while i < self.chunk.code.len() - 1 {
             let op = self.chunk.code.get(i).unwrap().into();
 
-            i = match op {
-                Op::Add => self.graph_instruction(i, &op),
-                Op::Assert => self.graph_instruction(i, &op),
-                Op::Constant => self.graph_unary(i, &op),
-                Op::DefineGlobal => self.graph_unary(i, &op),
-                Op::GetGlobal => self.graph_unary(i, &op),
-                Op::SetGlobal => self.graph_unary(i, &op),
-                Op::Nil => self.graph_instruction(i, &op),
-                Op::Pop => self.graph_instruction(i, &op),
-                Op::Print => self.graph_instruction(i, &op),
-                Op::Return => self.graph_instruction(i, &op),
-                Op::Negate => self.graph_instruction(i, &op),
-                Op::Not => self.graph_instruction(i, &op),
-                Op::Subtract => self.graph_instruction(i, &op),
-                Op::And => self.graph_instruction(i, &op),
-                Op::Divide => self.graph_instruction(i, &op),
-                Op::Equal => self.graph_instruction(i, &op),
-                Op::Greater => self.graph_instruction(i, &op),
-                Op::GreaterEqual => self.graph_instruction(i, &op),
-                Op::Or => self.graph_instruction(i, &op),
-                Op::Multiply => self.graph_instruction(i, &op),
-            }
+            let action = match op {
+                Op::Add => Self::graph_instruction,
+                Op::Assert => Self::graph_instruction,
+                Op::Constant => Self::graph_constant,
+                Op::DefineGlobal => Self::graph_constant,
+                Op::GetGlobal => Self::graph_constant,
+                Op::SetGlobal => Self::graph_constant,
+                Op::GetLocal => Self::graph_local,
+                Op::SetLocal => Self::graph_local,
+                Op::Nil => Self::graph_instruction,
+                Op::Pop => Self::graph_instruction,
+                Op::Print => Self::graph_instruction,
+                Op::Return => Self::graph_instruction,
+                Op::Negate => Self::graph_instruction,
+                Op::Not => Self::graph_instruction,
+                Op::Subtract => Self::graph_instruction,
+                Op::And => Self::graph_instruction,
+                Op::Divide => Self::graph_instruction,
+                Op::Equal => Self::graph_instruction,
+                Op::Greater => Self::graph_instruction,
+                Op::GreaterEqual => Self::graph_instruction,
+                Op::Or => Self::graph_instruction,
+                Op::Multiply => Self::graph_instruction,
+            };
+
+            i = action(self, i, &op);
         }
 
         eprintln!("}}")
     }
 
-    fn print_unary(&self, i: usize, line_part: String, op: &Op) -> usize {
+    fn print_local(&self, i: usize, line_part: String, op: &Op) -> usize {
+        // todo: graph the values instead of the pointer
+        let val = self.chunk.code.get(i + 1).unwrap();
+        let op = format!("{:?}", op);
+
+        eprintln!("{:04} {}{:16}{}", i, line_part, op, val,);
+        i + 2
+    }
+
+    fn print_constant(&self, i: usize, line_part: String, op: &Op) -> usize {
         // todo: graph the values instead of the pointer
         let val = self.chunk.code.get(i + 1).unwrap();
         let op = format!("{:?}", op);
@@ -1045,7 +1082,18 @@ impl Function {
         i + 1
     }
 
-    fn graph_unary(&self, i: usize, op: &Op) -> usize {
+    fn graph_local(&self, i: usize, op: &Op) -> usize {
+        // todo: graph the constant itself, not the pointer
+        let c = self.chunk.code.get(i + 1).unwrap();
+        let next: Op = self.chunk.code.get(i + 2).unwrap().into();
+
+        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
+        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
+
+        i + 2
+    }
+
+    fn graph_constant(&self, i: usize, op: &Op) -> usize {
         // todo: graph the constant itself, not the pointer
         let c = self.chunk.code.get(i + 1).unwrap();
         let next: Op = self.chunk.code.get(i + 2).unwrap().into();
@@ -1410,11 +1458,13 @@ mod test {
 
     #[test]
     fn simple_block_scope() {
-        let vm = compile_expression("
+        let vm = compile_expression(
+            "
             {
                 true;
             }
-        ");
+        ",
+        );
         let bytecode = function(&vm);
 
         assert_eq!(
@@ -1425,7 +1475,8 @@ mod test {
 
     #[test]
     fn block_scope_locals() {
-        let vm = compile_expression("
+        let vm = compile_expression(
+            "
             var x = 10;
             {
                 var x = 20;
@@ -1433,7 +1484,8 @@ mod test {
             {
                 var x = 30;
             }
-        ");
+        ",
+        );
         let bytecode = function(&vm);
 
         assert_eq!(
@@ -1448,6 +1500,37 @@ mod test {
                 Op::Pop as u8,
                 Op::Constant as u8,
                 3,
+                Op::Pop as u8,
+                Op::Return as u8,
+            ]
+        )
+    }
+
+    #[test]
+    fn block_scope_locals_get_and_set() {
+        let vm = compile_expression(
+            "
+            {
+                var x;
+                x = 10;
+                x;
+            }
+        ",
+        );
+        let bytecode = function(&vm);
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                Op::Nil as u8,
+                Op::Constant as u8,
+                0,
+                Op::SetLocal as u8,
+                1,
+                Op::Pop as u8,
+                Op::GetLocal as u8,
+                1,
+                Op::Pop as u8,
                 Op::Pop as u8,
                 Op::Return as u8,
             ]

@@ -68,6 +68,8 @@ pub enum Op {
     DefineGlobal,
     GetGlobal,
     SetGlobal,
+    GetLocal,
+    SetLocal,
     Divide,
     Equal,
     Greater,
@@ -83,7 +85,7 @@ pub enum Op {
     Subtract,
 }
 
-const OPS: [Op; 20] = [
+const OPS: [Op; 22] = [
     Op::Assert,
     Op::Add,
     Op::And,
@@ -91,6 +93,8 @@ const OPS: [Op; 20] = [
     Op::DefineGlobal,
     Op::GetGlobal,
     Op::SetGlobal,
+    Op::GetLocal,
+    Op::SetLocal,
     Op::Divide,
     Op::Equal,
     Op::Greater,
@@ -254,6 +258,12 @@ impl VM {
                 }
                 Op::SetGlobal => {
                     todo!("update global constants table")
+                }
+                Op::GetLocal => {
+                    todo!("reference a value further down the stack")
+                }
+                Op::SetLocal => {
+                    todo!("modify a value some distance down the stack")
                 }
                 Op::Pop => {
                     self.stack.pop();
