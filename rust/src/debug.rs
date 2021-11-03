@@ -58,6 +58,7 @@ impl Disassembler for Function {
                 GREATER_EQUAL => Self::print_instruction,
                 JUMP => Self::print_jump,
                 JUMP_IF_FALSE => Self::print_jump,
+                LOOP => Self::print_jump,
                 MULTIPLY => Self::print_instruction,
                 NEGATE => Self::print_instruction,
                 NIL => Self::print_instruction,
@@ -69,7 +70,7 @@ impl Disassembler for Function {
                 SET_GLOBAL => Self::print_constant,
                 SET_LOCAL => Self::print_local,
                 SUBTRACT => Self::print_instruction,
-                24_u8..=u8::MAX => panic!("Invalid opcode."),
+                25_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op.bytecode_name());
@@ -93,30 +94,31 @@ impl GraphAssembly for Function {
 
             let action = match op {
                 ADD => Self::graph_instruction,
+                AND => Self::graph_instruction,
                 ASSERT => Self::graph_instruction,
                 CONSTANT => Self::graph_constant,
                 DEFINE_GLOBAL => Self::graph_constant,
+                DIVIDE => Self::graph_instruction,
+                EQUAL => Self::graph_instruction,
                 GET_GLOBAL => Self::graph_constant,
-                SET_GLOBAL => Self::graph_constant,
                 GET_LOCAL => Self::graph_local,
-                SET_LOCAL => Self::graph_local,
+                GREATER => Self::graph_instruction,
+                GREATER_EQUAL => Self::graph_instruction,
+                JUMP => Self::graph_jump,
+                JUMP_IF_FALSE => Self::graph_jump,
+                LOOP => Self::graph_jump,
+                MULTIPLY => Self::graph_instruction,
+                NEGATE => Self::graph_instruction,
                 NIL => Self::graph_instruction,
+                NOT => Self::graph_instruction,
+                OR => Self::graph_instruction,
                 POP => Self::graph_instruction,
                 PRINT => Self::graph_instruction,
                 RETURN => Self::graph_instruction,
-                NEGATE => Self::graph_instruction,
-                NOT => Self::graph_instruction,
+                SET_GLOBAL => Self::graph_constant,
+                SET_LOCAL => Self::graph_local,
                 SUBTRACT => Self::graph_instruction,
-                AND => Self::graph_instruction,
-                DIVIDE => Self::graph_instruction,
-                EQUAL => Self::graph_instruction,
-                GREATER => Self::graph_instruction,
-                GREATER_EQUAL => Self::graph_instruction,
-                OR => Self::graph_instruction,
-                MULTIPLY => Self::graph_instruction,
-                JUMP => Self::graph_jump,
-                JUMP_IF_FALSE => Self::graph_jump,
-                24_u8..=u8::MAX => panic!("Invalid opcode."),
+                25_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op);
@@ -310,6 +312,7 @@ impl DisassembleInstruction for u8 {
             GREATER_EQUAL => String::from("OP_GREATER_EQUAL"),
             JUMP => String::from("OP_JUMP"),
             JUMP_IF_FALSE => String::from("OP_JUMP_IF_FALSE"),
+            LOOP => String::from("OP_LOOP"),
             MULTIPLY => String::from("OP_MULTIPLY"),
             NEGATE => String::from("OP_NEGATE"),
             NIL => String::from("OP_NIL"),
@@ -321,7 +324,7 @@ impl DisassembleInstruction for u8 {
             SET_GLOBAL => String::from("OP_SET_GLOBAL"),
             SET_LOCAL => String::from("OP_SET_LOCAL"),
             SUBTRACT => String::from("OP_SUBTRACT"),
-            24_u8..=u8::MAX => panic!("Invalid Opcode."),
+            25_u8..=u8::MAX => panic!("Invalid Opcode."),
         }
     }
 }

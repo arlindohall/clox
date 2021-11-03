@@ -448,10 +448,6 @@ impl<'a> Compiler<'a> {
         todo!("compile a return statement")
     }
 
-    fn for_statement(&self) {
-        todo!("compile a for loop")
-    }
-
     fn if_statement(&mut self) {
         self.consume(LeftParen, "Expect '(' after if keyword.");
         self.expression();
@@ -495,8 +491,31 @@ impl<'a> Compiler<'a> {
         self.patch_jump(else_jump, end - (else_jump + 2));
     }
 
-    fn while_statement(&self) {
-        todo!("compile a while statement")
+    fn while_statement(&mut self) {
+        let pre_condition = self.function().chunk.code.len();
+
+        self.consume(LeftParen, "Expect '(' after while keyword.");
+        self.expression();
+        self.consume(RightParen, "Expect ')' after while condition.");
+
+        let condition_jump = self.function().chunk.code.len();
+
+        self.emit_byte(op::JUMP_IF_FALSE);
+        self.emit_bytes(0, 0);
+
+        self.statement();
+
+        let loop_patch = self.function().chunk.code.len();
+
+        self.emit_byte(op::LOOP);
+        self.emit_bytes(0, 0);
+
+        self.patch_jump(loop_patch, (loop_patch + 2) - pre_condition);
+        self.patch_jump(condition_jump, (loop_patch + 3) - (condition_jump + 2));
+    }
+
+    fn for_statement(&self) {
+        todo!("compile a for loop")
     }
 
     fn jump_target(ip: usize) -> (u8, u8) {
@@ -1316,6 +1335,51 @@ mod test {
             op::CONSTANT,
             1,
             op::PRINT,
+            op::RETURN
+        ]
+    }
+
+    compile_expression! {
+        bytecode, vm,
+        if_statement_with_block,
+        "
+            if (true) {
+                var x = 10;
+            }
+        ",
+        vec![
+            op::CONSTANT,
+            0,
+            op::JUMP_IF_FALSE,
+            0,
+            4,
+            op::CONSTANT,
+            1,
+            op::POP,
+            op::RETURN
+        ]
+    }
+
+    compile_expression! {
+        bytecode, vm,
+        while_statement,
+        "
+            while (false) {
+                var x = 10;
+            }
+        ",
+        vec![
+            op::CONSTANT,
+            0,
+            op::JUMP_IF_FALSE,
+            0,
+            7,
+            op::CONSTANT,
+            1,
+            op::POP,
+            op::LOOP,
+            0,
+            10,
             op::RETURN
         ]
     }

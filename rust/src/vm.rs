@@ -75,6 +75,7 @@ pub mod op {
         GreaterEqual,
         Jump,
         JumpIfFalse,
+        Loop,
         Multiply,
         Negate,
         Nil,
@@ -102,6 +103,7 @@ pub mod op {
     pub const GREATER_EQUAL: u8 = GreaterEqual as u8;
     pub const JUMP: u8 = Jump as u8;
     pub const JUMP_IF_FALSE: u8 = JumpIfFalse as u8;
+    pub const LOOP: u8 = Loop as u8;
     pub const MULTIPLY: u8 = Multiply as u8;
     pub const NEGATE: u8 = Negate as u8;
     pub const NIL: u8 = Nil as u8;
