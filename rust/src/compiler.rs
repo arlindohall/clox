@@ -1051,7 +1051,7 @@ mod test {
     use super::*;
     use crate::{debug::Disassembler, vm::LoxError::ScanError};
 
-    macro_rules! compile_expression {
+    macro_rules! test_expression {
         ($bytecode:ident, $vm:ident, $name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
@@ -1078,7 +1078,7 @@ mod test {
         };
     }
 
-    macro_rules! compile_broken {
+    macro_rules! test_broken_expression {
         ($errors:ident, $name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
@@ -1113,119 +1113,119 @@ mod test {
         }
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         compile_variable_declaration,
         "var x;",
         vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         compile_simple_integer_expression,
         "1;",
         vec![op::CONSTANT, 0, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         compile_print_expression,
         "print 1;",
         vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         compile_print_string,
         "print \"hello\";",
         vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         add_two_numbers,
         "1+1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::ADD, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         subtract_two_numbers,
         "1-1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::SUBTRACT, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         multiply_two_numbers,
         "1*1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::MULTIPLY, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         divide_two_numbers,
         "1/1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::DIVIDE, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         negate_a_number,
         "-1;",
         vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         compare_for_equality,
         "1 == 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::EQUAL, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         greater_than_numbers,
         "2 > 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         greater_than_equal_numbers,
         "2 >= 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         less_than_numbers,
         "2 < 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::NOT, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         less_than_equal_numbers,
         "2 <= 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::NOT, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         declare_variable,
         "var x;",
         vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         define_global_variable,
         "var x = 10;",
         vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         define_and_reference_global_variable,
         "
@@ -1235,14 +1235,14 @@ mod test {
         vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::GET_GLOBAL, 0, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         simple_block_scope,
         "{ true; }",
         vec![op::CONSTANT, 0, op::POP, op::RETURN]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         block_scope_locals,
         "
@@ -1269,7 +1269,7 @@ mod test {
         ]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         block_scope_locals_get_and_set,
         "
@@ -1294,7 +1294,7 @@ mod test {
         ]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         if_statement,
         "
@@ -1320,7 +1320,7 @@ mod test {
         ]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         if_statement_no_else,
         "
@@ -1339,7 +1339,7 @@ mod test {
         ]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         if_statement_with_block,
         "
@@ -1360,7 +1360,7 @@ mod test {
         ]
     }
 
-    compile_expression! {
+    test_expression! {
         bytecode, vm,
         while_statement,
         "
@@ -1384,7 +1384,7 @@ mod test {
         ]
     }
 
-    compile_broken! {
+    test_broken_expression! {
         errors,
         compile_error_incomplete_var_expression,
         "var;",
@@ -1394,7 +1394,7 @@ mod test {
         }
     }
 
-    compile_broken! {
+    test_broken_expression! {
         errors,
         compile_error_unexpected_end_of_expr,
         ";",
@@ -1409,7 +1409,7 @@ mod test {
         }
     }
 
-    compile_broken! {
+    test_broken_expression! {
         errors,
         compile_error_unterminated_string,
         "\"a",

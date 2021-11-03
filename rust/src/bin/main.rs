@@ -94,7 +94,7 @@ mod test {
 
     use super::*;
 
-    macro_rules! script_test {
+    macro_rules! test_script {
         ($name:ident, $filename:literal) => {
             #[test]
             fn $name() -> Result<(), std::io::Error> {
@@ -118,9 +118,9 @@ mod test {
         };
     }
 
-    script_test! { run_file_var, "var" }
-    script_test! { run_file_block_scope, "block-scope"}
-    script_test! { run_file_expr, "expr" }
-    script_test! { run_file_print, "print" }
-    script_test! { run_file_simple, "simple" }
+    test_script! { run_file_var, "var" }
+    test_script! { run_file_block_scope, "block-scope"}
+    test_script! { run_file_expr, "expr" }
+    test_script! { run_file_print, "print" }
+    test_script! { run_file_simple, "simple" }
 }

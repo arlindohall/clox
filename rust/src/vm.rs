@@ -516,7 +516,7 @@ impl Error for LoxErrorChain {}
 mod test {
     use super::*;
 
-    macro_rules! fail_program {
+    macro_rules! test_program_failure {
         ($test_name:ident, $text:literal) => {
             #[test]
             #[should_panic]
@@ -557,7 +557,7 @@ mod test {
 
     test_program! { assert_true, "assert true;" }
 
-    fail_program! {
+    test_program_failure! {
         assert_false,
         "assert false;"
     }
