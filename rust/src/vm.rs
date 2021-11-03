@@ -514,90 +514,117 @@ impl Error for LoxErrorChain {}
 mod test {
     use super::*;
 
-    fn run(statement: &str) {
-        unsafe {
-            // Debug print in case the test fails, makes debugging easier
-            crate::debug::DEBUG_PRINT_CODE = true;
-            crate::debug::DEBUG_TRACE_EXECUTION = true;
-        }
-        match VM::default().interpret(statement) {
-            Ok(_) => (),
-            Err((_, e)) => {
-                println!("Error interpreting statement {}", e);
-                panic!()
+    macro_rules! fail_program {
+        ($test_name:ident, $text:literal) => {
+            #[test]
+            #[should_panic]
+            fn $test_name() {
+                unsafe {
+                    // Debug print in case the test fails, makes debugging easier
+                    crate::debug::DEBUG_PRINT_CODE = true;
+                    crate::debug::DEBUG_TRACE_EXECUTION = true;
+                }
+                match VM::default().interpret($text) {
+                    _ => (),
+                }
             }
-        }
+        };
     }
 
-    #[test]
-    fn run_hello_world_function() {
-        run("print \"Hello, world!\";");
+    macro_rules! test_program {
+        ($test_name:ident, $text:literal) => {
+            #[test]
+            fn $test_name() {
+                unsafe {
+                    // Debug print in case the test fails, makes debugging easier
+                    crate::debug::DEBUG_PRINT_CODE = true;
+                    crate::debug::DEBUG_TRACE_EXECUTION = true;
+                }
+                match VM::default().interpret($text) {
+                    Ok(_) => (),
+                    Err((_, e)) => {
+                        println!("Error interpreting statement {}", e);
+                        panic!()
+                    }
+                }
+            }
+        };
     }
 
-    #[test]
-    fn assert_at_runtime() {
-        run("assert true;");
+    test_program! { hello_world_function, "print \"Hello, world!\";"}
+
+    test_program! { assert_true, "assert true;" }
+
+    fail_program! {
+        assert_false,
+        "assert false;"
     }
 
-    #[test]
-    #[should_panic]
-    fn assert_false() {
-        run("assert false;");
+    test_program! {
+        compare_two_numbers,
+        "assert 1 == 1;"
     }
 
-    #[test]
-    fn compare_two_numbers() {
-        run("assert 1 == 1;")
+    test_program! {
+        add_two_numbers,
+        "assert 1 + 1 == 2;"
     }
 
-    #[test]
-    fn add_two_numbers() {
-        run("assert 1 + 1 == 2;")
-    }
-
-    #[test]
-    fn greater_than_numbers() {
-        run("assert 2 > 1;
+    test_program! {
+        greater_than_numbers,
+        "
+            assert 2 > 1;
             assert ! (1 > 1);
-            assert ! (0 > 1);");
+            assert ! (0 > 1);
+        "
     }
 
-    #[test]
-    fn greater_than_equal_numbers() {
-        run("assert 2 >= 1;
+    test_program! {
+        greater_than_equal_numbers,
+        "
+            assert 2 >= 1;
             assert 1 >= 1;
-            assert ! (0 > 1);");
+            assert ! (0 > 1);
+        "
     }
 
-    #[test]
-    fn less_than_numbers() {
-        run("assert ! (2 < 1);
+    test_program! {
+        less_than_numbers,
+        "
+            assert ! (2 < 1);
             assert ! (1 < 1);
-            assert 0 < 1;");
+            assert 0 < 1;
+        "
     }
 
-    #[test]
-    fn less_than_equal_numbers() {
-        run("assert ! (2 <= 1);
+    test_program! {
+        less_than_equal_numbers,
+        "
+            assert ! (2 <= 1);
             assert 1 <= 1;
-            assert 0 <= 1;");
+            assert 0 <= 1;
+        "
     }
 
-    #[test]
-    fn multiply_and_divide() {
-        run("assert 2 * 2 == 4;
-            assert 10 / 5 == 2;");
+    test_program! {
+        multiply_and_divide,
+        "
+            assert 2 * 2 == 4;
+            assert 10 / 5 == 2;
+        "
     }
 
-    #[test]
-    fn define_and_reference_global_variable() {
-        run("var x = 10;
-            assert x == 10;");
+    test_program! {
+        define_and_reference_global_variable,
+        "
+            var x = 10;
+            assert x == 10;
+        "
     }
 
-    #[test]
-    fn local_variables_block_scoping() {
-        run("
+    test_program! {
+        local_variables_block_scoping,
+        "
             var x = 10;
             {
                 var x = 20;
@@ -608,12 +635,12 @@ mod test {
                 var x = 30;
                 assert x == 30;
             }
-        ");
+        "
     }
 
-    #[test]
-    fn local_variables_get_and_set() {
-        run("
+    test_program! {
+        local_variables_get_and_set,
+        "
             var x = 10;
             {
                 var x;
@@ -622,22 +649,24 @@ mod test {
                 x = 20;
                 assert x == 20;
             }
-            assert x == 10;");
+            assert x == 10;
+        "
     }
 
-    #[test]
-    fn set_global_variable() {
-        run("
+    test_program! {
+        set_global_variable,
+        "
             var x = 10;
             assert x == 10;
 
             x = 20;
-            assert x == 20;");
+            assert x == 20;
+        "
     }
 
-    #[test]
-    fn chained_assignment() {
-        run("
+    test_program! {
+        chained_assignment,
+        "
             var x = 10;
             var y = 20;
 
@@ -656,12 +685,12 @@ mod test {
 
             assert x == 30;
             assert y == 30;
-        ");
+        "
     }
 
-    #[test]
-    fn chained_assignment_multi() {
-        run("
+    test_program! {
+        chained_assignment_multi,
+        "
             {
                 var x = 10;
                 var y = 20;
@@ -674,17 +703,17 @@ mod test {
                 var t = 0;
                 assert t == 0;
             }
-        ");
+        "
     }
 
-    #[test]
-    fn concatenate_strings() {
+    test_program! {
+        concatenate_strings,
         // Actually tests that we intern the string by re-constructing
-        run("
+        "
             var x = \"Hello,\";
             var y = \"world!\";
 
             assert \"Hello, world!\" == x + \" \" + y;
-        ");
+        "
     }
 }
