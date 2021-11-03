@@ -200,19 +200,18 @@ impl VM {
                     }
                 }
                 op::ADD => {
-                    let v1 = self.stack.pop().unwrap();
-                    let v2 = self.stack.pop().unwrap();
+                    // Reverse order of arguments a and b to match lexical order
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
 
-                    if self.is_string(&v1) && self.is_string(&v2) {
-                        let v1 = v1.as_pointer();
-                        let v2 = v2.as_pointer();
+                    if self.is_string(&a) && self.is_string(&b) {
+                        let a = a.as_pointer();
+                        let b = b.as_pointer();
 
-                        let v1 = self.memory.retrieve(&v1).as_string();
-                        let v2 = self.memory.retrieve(&v2).as_string();
-                        let string = self.concatenate(v1, v2);
+                        let string = self.concatenate(a, b);
                         self.stack.push(string)
-                    } else if let (Some(n1), Some(n2)) = (v1.as_number(), v2.as_number()) {
-                        self.stack.push(Value::Number(n1 + n2))
+                    } else if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
+                        self.stack.push(Value::Number(a + b))
                     } else {
                         self.runtime_error("Operands must be two numbers or two strings.")
                     }
@@ -406,12 +405,14 @@ impl VM {
         self.frames.last().unwrap().ip
     }
 
-    pub fn concatenate(&self, str1: &str, str2: &str) -> Value {
-        todo!(
-            "concatenate two strings and intern the result ({}, {})",
-            str1,
-            str2
-        )
+    pub fn concatenate(&mut self, v1: MemoryEntry, v2: MemoryEntry) -> Value {
+        let v1 = self.memory.retrieve(&v1).as_string();
+        let v2 = self.memory.retrieve(&v2).as_string();
+
+        let mut result = v1.clone();
+        result.push_str(v2);
+
+        Value::Object(self.memory.allocate(Object::String(Box::new(result))))
     }
 
     pub fn line_number(&self) -> usize {
@@ -670,6 +671,17 @@ mod test {
                 var t = 0;
                 assert t == 0;
             }
+        ");
+    }
+
+    #[test]
+    fn concatenate_strings() {
+        // Actually tests that we intern the string by re-constructing
+        run("
+            var x = \"Hello,\";
+            var y = \"world!\";
+
+            assert \"Hello, world!\" == x + \" \" + y;
         ");
     }
 }

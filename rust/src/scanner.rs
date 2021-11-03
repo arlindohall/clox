@@ -313,7 +313,12 @@ impl Scanner {
         }
 
         self.advance();
-        self.make_token(TokenString)
+
+        let mut token = self.make_token(TokenString);
+        token.start += 1;
+        token.length -= 2;
+
+        token
     }
 
     fn match_(&mut self, c: char) -> bool {

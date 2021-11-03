@@ -890,8 +890,7 @@ fn grouping(this: &mut Compiler, _can_assign: bool) {
 }
 
 fn string(this: &mut Compiler, _can_assign: bool) {
-    let value = this.scanner.copy_segment(&this.parser.previous);
-    let value = this.vm.memory.allocate(Object::String(value));
+    let value = this.copy_string();
 
     let index = this.make_constant(Value::Object(value));
     this.emit_bytes(op::CONSTANT, index);

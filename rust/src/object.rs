@@ -29,7 +29,7 @@ pub enum Object {
 pub struct Memory {
     count: usize,
     memory: HashMap<MemoryEntry, Object>,
-    strings: HashMap<Box<String>, MemoryEntry>,
+    strings: HashMap<String, MemoryEntry>,
 }
 
 impl Default for Memory {
@@ -60,9 +60,14 @@ impl Memory {
     }
 
     pub fn intern(&mut self, string: Box<String>) -> MemoryEntry {
-        match self.strings.get(&string) {
+        match self.strings.get(&*string) {
             Some(m_loc) => m_loc.clone(),
-            None => self.insert(Object::String(string)),
+            None => {
+                let m_loc = self.insert(Object::String(string.clone()));
+                self.strings.insert(*string, m_loc.clone());
+
+                m_loc
+            }
         }
     }
 
@@ -90,7 +95,7 @@ impl Display for Object {
             Object::Function(func) => write!(f, "fn<{}>", func.name),
             Object::_Instance() => todo!("display an instance"),
             Object::_Native() => todo!("display a native function"),
-            Object::String(s) => write!(f, "{}", s),
+            Object::String(s) => write!(f, "\"{}\"", s),
             Object::_Upvalue() => todo!("display an upvalue"),
         }
     }
