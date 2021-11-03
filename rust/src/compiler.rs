@@ -471,15 +471,17 @@ impl<'a> Compiler<'a> {
         // consume a block: this could just be a single expression statement
         self.statement();
 
+        if !self.match_(Else) {
+            let end = self.function().chunk.code.len();
+            self.patch_jump(then_jump, end - (then_jump + 2));
+            return;
+        }
+
         // The else branch is where we jump to, so we'll use the current "ip" to
         // patch the if branch, and we'll patch this jump instruction once we've
         // emitted he else branch.
         let else_jump = self.function().chunk.code.len();
         self.patch_jump(then_jump, (else_jump + 3) - (then_jump + 2));
-
-        if !self.match_(Else) {
-            return;
-        }
 
         self.emit_byte(op::JUMP);
         self.emit_bytes(0, 0); // We'll patch these after the whole if/else
@@ -1449,6 +1451,31 @@ mod test {
                 4,
                 op::CONSTANT,
                 2,
+                op::PRINT,
+                op::RETURN
+            ]
+        )
+    }
+
+    #[test]
+    fn if_statement_no_else() {
+        let vm = compile_expression(
+            "
+            if (true) print 10;
+            "
+        );
+        let bytecode = function(&vm);
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                op::CONSTANT,
+                0,
+                op::JUMP_IF_FALSE,
+                0,
+                4,
+                op::CONSTANT,
+                1,
                 op::PRINT,
                 op::RETURN
             ]
