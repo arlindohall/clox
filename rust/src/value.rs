@@ -43,7 +43,7 @@ impl Display for Value {
         match self {
             Value::Number(n) => write!(f, "{}", n),
             Value::Boolean(b) => write!(f, "{}", b),
-            Value::Object(_) => write!(f, "<ptr>"),
+            Value::Object(p) => write!(f, "<ptr {}>", p),
             Value::Nil => write!(f, "nil"),
         }
     }

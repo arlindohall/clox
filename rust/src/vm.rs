@@ -247,7 +247,19 @@ impl VM {
                     self.stack.push(self.globals.get(name).unwrap().clone())
                 }
                 op::SET_GLOBAL => {
-                    todo!("update global constants table")
+                    let val = self.stack.pop().unwrap();
+                    let name = *self.read_byte() as usize;
+                    let name = self
+                        .current_closure()
+                        .chunk
+                        .constants
+                        .get(name)
+                        .unwrap()
+                        .as_pointer();
+                    let name = self.memory.retrieve(&name).as_string().clone();
+
+                    self.globals.insert(name, val.clone());
+                    self.stack.push(val) // pancake
                 }
                 op::GET_LOCAL => {
                     let base = self.frames.last().unwrap().slots;
@@ -261,8 +273,8 @@ impl VM {
                     let offset = *self.read_byte() as usize;
                     let index = base + offset - 1;
 
-                    let new_value = self.stack.pop().unwrap();
-                    self.stack.insert(index, new_value)
+                    let new_value = self.stack.last().unwrap();
+                    self.stack[index] = new_value.clone();
                 }
                 op::POP => {
                     self.stack.pop();
@@ -607,5 +619,57 @@ mod test {
                 assert x == 20;
             }
             assert x == 10;");
+    }
+
+    #[test]
+    fn set_global_variable() {
+        run("
+            var x = 10;
+            assert x == 10;
+
+            x = 20;
+            assert x == 20;");
+    }
+
+    #[test]
+    fn chained_assignment() {
+        run("
+            var x = 10;
+            var y = 20;
+
+            assert 30 == (x = y = 30);
+            assert x == 30;
+            assert y == 30;
+
+            {
+                var x = 40;
+                var y = 50;
+
+                assert 60 == (x = y = 60);
+                assert x == 60;
+                assert y == 60;
+            }
+
+            assert x == 30;
+            assert y == 30;
+        ");
+    }
+
+    #[test]
+    fn chained_assignment_multi() {
+        run("
+            {
+                var x = 10;
+                var y = 20;
+                var z = 30;
+
+                assert 30 == (x = y = z);
+            }
+
+            {
+                var t = 0;
+                assert t == 0;
+            }
+        ");
     }
 }
