@@ -3,12 +3,11 @@ use std::error::Error;
 use std::fmt::Display;
 
 use crate::compiler::{Compiler, Function};
-use crate::debug::DisassembleInstruction;
+use crate::debug::DebugTrace;
 use crate::object::{Memory, MemoryEntry, Object};
 use crate::value::Value;
 
 const MAX_FRAMES: usize = 265;
-static mut DEBUG_TRACE_EXECUTION: bool = false;
 
 /// Lox Virtual Machine.
 ///
@@ -29,14 +28,14 @@ static mut DEBUG_TRACE_EXECUTION: bool = false;
 /// ```
 #[derive(Debug)]
 pub struct VM {
-    stack: Vec<Value>,
+    pub(crate) stack: Vec<Value>,
     globals: HashMap<String, Value>,
 
     // todo: replace all pub with pub(crate) where possible
-    pub memory: Memory,
+    pub(crate) memory: Memory,
 
+    /// Frames are public so the `debug` module can use them
     frames: Vec<CallFrame>,
-    ip: usize,
 
     error_chain: LoxErrorChain,
 }
@@ -125,7 +124,6 @@ impl Default for VM {
             stack: Vec::new(),
             globals: HashMap::new(),
             memory: Memory::default(),
-            ip: 0,
             frames: Vec::new(),
             error_chain: LoxErrorChain::default(),
         }
@@ -185,7 +183,7 @@ impl VM {
     pub fn run(&mut self) {
         self.debug_trace_function();
         loop {
-            self.debug_trace();
+            self.debug_trace_instruction();
             let op = self.read_byte();
 
             match *op {
@@ -392,6 +390,10 @@ impl VM {
         self.memory.retrieve(&frame.closure).as_function()
     }
 
+    pub(crate) fn ip(&self) -> usize {
+        self.frames.last().unwrap().ip
+    }
+
     pub fn concatenate(&self, str1: &str, str2: &str) -> Value {
         todo!(
             "concatenate two strings and intern the result ({}, {})",
@@ -411,7 +413,7 @@ impl VM {
     }
 
     pub fn read_byte(&mut self) -> &u8 {
-        let ip = self.frames.last().unwrap().ip;
+        let ip = self.ip();
         self.frames.last_mut().unwrap().ip += 1;
 
         self.current_closure().chunk.code.get(ip).unwrap()
@@ -423,70 +425,6 @@ impl VM {
                 matches!(self.memory.retrieve(ptr), Object::String(_))
             }
             _ => false,
-        }
-    }
-
-    fn debug_trace_function(&self) {
-        unsafe {
-            if !DEBUG_TRACE_EXECUTION {
-                return;
-            }
-        }
-
-        eprintln!(
-            "----- execute::{} -----",
-            if !self.current_closure().name.is_empty() {
-                &self.current_closure().name
-            } else {
-                "<script>"
-            }
-        );
-    }
-
-    fn debug_trace(&self) {
-        unsafe {
-            if !DEBUG_TRACE_EXECUTION {
-                return;
-            }
-        }
-
-        let ip = self.frames.last().unwrap().ip;
-
-        let line_part = self.get_line_part(ip);
-
-        let op = *self.current_closure().chunk.code.get(ip).unwrap();
-        let op = op.bytecode_name();
-
-        let show_val = |v: &Value| -> String {
-            match v {
-                Value::Object(ptr) => format!(
-                    "{}",
-                    self.memory.retrieve(ptr)
-                ),
-                _ => format!("{}", v)
-            }
-        };
-
-        let stack = self
-            .stack
-            .iter()
-            .map(show_val)
-            .collect::<Vec<String>>()
-            .join(", ");
-        eprintln!("{:04} {}{:16} {}", ip, line_part, op, stack);
-    }
-
-    fn get_line_part(&self, i: usize) -> String {
-        if i == 0 {
-            return format!("{:<4}", "|");
-        }
-
-        let line = *self.current_closure().chunk.lines.get(i - 1).unwrap();
-        let this_line = *self.current_closure().chunk.lines.get(i).unwrap();
-        if this_line > line {
-            format!("{:<4}", this_line)
-        } else {
-            format!("{:<4}", "|")
         }
     }
 }
@@ -559,13 +497,12 @@ impl Error for LoxErrorChain {}
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::compiler::{DebugOutput, DEBUG_PRINT_CODE};
 
     fn run(statement: &str) {
         unsafe {
             // Debug print in case the test fails, makes debugging easier
-            DEBUG_PRINT_CODE = DebugOutput::Table;
-            DEBUG_TRACE_EXECUTION = true;
+            crate::debug::DEBUG_PRINT_CODE = true;
+            crate::debug::DEBUG_TRACE_EXECUTION = true;
         }
         match VM::default().interpret(statement) {
             Ok(_) => (),

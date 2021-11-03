@@ -1,4 +1,5 @@
-use crate::debug::DisassembleInstruction;
+use crate::debug::Disassembler;
+use crate::debug::GraphAssembly;
 use crate::object::MemoryEntry;
 use crate::object::Object;
 use crate::scanner::Scanner;
@@ -11,14 +12,6 @@ use crate::vm::LoxError::ParseError;
 use crate::vm::LoxErrorChain;
 use crate::vm::VM;
 
-#[allow(dead_code)]
-pub enum DebugOutput {
-    None,
-    Table,
-    GraphViz,
-}
-
-pub(crate) static mut DEBUG_PRINT_CODE: DebugOutput = DebugOutput::None;
 const UNINITIALIZED: isize = -1;
 
 /// Compiler used for a single function or script.
@@ -782,13 +775,8 @@ impl<'a> Compiler<'a> {
     fn end_compiler(mut self) -> Result<MemoryEntry, LoxErrorChain> {
         self.emit_return();
 
-        unsafe {
-            match DEBUG_PRINT_CODE {
-                DebugOutput::Table => self.function().disassemble_chunk(),
-                DebugOutput::GraphViz => self.function().graph_output_chunk(),
-                DebugOutput::None => (),
-            }
-        }
+        self.function().disassemble_chunk();
+        self.function().graph_output_chunk();
 
         if self.scanner.error_chain.had_error() {
             self.scanner.error_chain.print_all();
@@ -950,172 +938,11 @@ impl ConvertNumber for String {
     }
 }
 
-impl Function {
-    fn disassemble_chunk(&self) {
-        eprintln!(
-            "===== chunk {} =====",
-            if !self.name.is_empty() {
-                &self.name
-            } else {
-                "<script>"
-            }
-        );
-        let mut i = 0;
-
-        while i < self.chunk.code.len() {
-            let op = *self.chunk.code.get(i).unwrap();
-
-            let action = match op {
-                op::ADD => Self::print_instruction,
-                op::ASSERT => Self::print_instruction,
-                op::CONSTANT => Self::print_constant,
-                op::DEFINE_GLOBAL => Self::print_constant,
-                op::GET_GLOBAL => Self::print_constant,
-                op::SET_GLOBAL => Self::print_constant,
-                op::GET_LOCAL => Self::print_local,
-                op::SET_LOCAL => Self::print_local,
-                op::NIL => Self::print_instruction,
-                op::POP => Self::print_instruction,
-                op::PRINT => Self::print_instruction,
-                op::RETURN => Self::print_instruction,
-                op::NEGATE => Self::print_instruction,
-                op::NOT => Self::print_instruction,
-                op::SUBTRACT => Self::print_instruction,
-                op::AND => Self::print_instruction,
-                op::DIVIDE => Self::print_instruction,
-                op::EQUAL => Self::print_instruction,
-                op::GREATER => Self::print_instruction,
-                op::GREATER_EQUAL => Self::print_instruction,
-                op::OR => Self::print_instruction,
-                op::MULTIPLY => Self::print_instruction,
-                22_u8..=u8::MAX => panic!("Invalid opcode."),
-            };
-
-            i = action(self, i, op.bytecode_name());
-        }
-    }
-
-    fn print_local(&self, i: usize, op: String) -> usize {
-        // todo: graph the values instead of the pointer
-        let val = self.chunk.code.get(i + 1).unwrap();
-        let line_part = self.get_line_part(i);
-
-        eprintln!("{:04} {}{:16}{:4}", i, line_part, op, val,);
-        i + 2
-    }
-
-    fn print_constant(&self, i: usize, op: String) -> usize {
-        // todo: graph the values instead of the pointer
-        let val = self.chunk.code.get(i + 1).unwrap();
-        let line_part = self.get_line_part(i);
-
-        eprintln!(
-            "{:04} {}{:16}{:4} '{}'",
-            i,
-            line_part,
-            op,
-            val,
-            self.chunk.constants.get(*val as usize).unwrap()
-        );
-        i + 2
-    }
-
-    fn print_instruction(&self, i: usize, op: String) -> usize {
-        let line_part = self.get_line_part(i);
-        eprintln!("{:04} {}{}", i, line_part, op);
-        i + 1
-    }
-
-    fn get_line_part(&self, i: usize) -> String {
-        if i == 0 {
-            return format!("{:<4}", "|");
-        }
-
-        let line = *self.chunk.lines.get(i - 1).unwrap();
-        let this_line = *self.chunk.lines.get(i).unwrap();
-        if this_line > line {
-            format!("{:<4}", this_line)
-        } else {
-            format!("{:<4}", "|")
-        }
-    }
-
-    fn graph_output_chunk(&self) {
-        eprintln!("digraph chunk {{");
-        let mut i = 0;
-
-        while i < self.chunk.code.len() - 1 {
-            let op = *self.chunk.code.get(i).unwrap();
-
-            let action = match op {
-                op::ADD => Self::graph_instruction,
-                op::ASSERT => Self::graph_instruction,
-                op::CONSTANT => Self::graph_constant,
-                op::DEFINE_GLOBAL => Self::graph_constant,
-                op::GET_GLOBAL => Self::graph_constant,
-                op::SET_GLOBAL => Self::graph_constant,
-                op::GET_LOCAL => Self::graph_local,
-                op::SET_LOCAL => Self::graph_local,
-                op::NIL => Self::graph_instruction,
-                op::POP => Self::graph_instruction,
-                op::PRINT => Self::graph_instruction,
-                op::RETURN => Self::graph_instruction,
-                op::NEGATE => Self::graph_instruction,
-                op::NOT => Self::graph_instruction,
-                op::SUBTRACT => Self::graph_instruction,
-                op::AND => Self::graph_instruction,
-                op::DIVIDE => Self::graph_instruction,
-                op::EQUAL => Self::graph_instruction,
-                op::GREATER => Self::graph_instruction,
-                op::GREATER_EQUAL => Self::graph_instruction,
-                op::OR => Self::graph_instruction,
-                op::MULTIPLY => Self::graph_instruction,
-                22_u8..=u8::MAX => panic!("Invalid opcode."),
-            };
-
-            i = action(self, i, op);
-        }
-
-        eprintln!("}}")
-    }
-
-    fn graph_local(&self, i: usize, op: u8) -> usize {
-        // todo: graph the constant itself, not the pointer
-        let c = self.chunk.code.get(i + 1).unwrap();
-        let next = self.chunk.code.get(i + 2).unwrap();
-
-        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
-
-        i + 2
-    }
-
-    fn graph_constant(&self, i: usize, op: u8) -> usize {
-        // todo: graph the constant itself, not the pointer
-        let c = self.chunk.code.get(i + 1).unwrap();
-        let next = self.chunk.code.get(i + 2).unwrap();
-
-        let c = self.chunk.constants.get(*c as usize).unwrap();
-
-        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
-
-        i + 2
-    }
-
-    fn graph_instruction(&self, i: usize, op: u8) -> usize {
-        let next = self.chunk.code.get(i + 1).unwrap();
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 1, next);
-
-        i + 1
-    }
-}
-
 #[cfg(test)]
 mod test {
 
     use super::*;
-    use crate::vm::LoxError::ScanError;
+    use crate::{debug::Disassembler, vm::LoxError::ScanError};
 
     fn function(vm: &VM) -> &Function {
         vm.memory.retrieve(&crate::object::mem(0)).as_function()
