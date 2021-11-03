@@ -73,6 +73,8 @@ pub mod op {
         GetLocal,
         Greater,
         GreaterEqual,
+        Jump,
+        JumpIfFalse,
         Multiply,
         Negate,
         Nil,
@@ -98,6 +100,8 @@ pub mod op {
     pub const GET_LOCAL: u8 = GetLocal as u8;
     pub const GREATER: u8 = Greater as u8;
     pub const GREATER_EQUAL: u8 = GreaterEqual as u8;
+    pub const JUMP: u8 = Jump as u8;
+    pub const JUMP_IF_FALSE: u8 = JumpIfFalse as u8;
     pub const MULTIPLY: u8 = Multiply as u8;
     pub const NEGATE: u8 = Negate as u8;
     pub const NIL: u8 = Nil as u8;
@@ -188,7 +192,7 @@ impl VM {
 
             match *op {
                 op::ASSERT => {
-                    let val = self.stack.last().unwrap();
+                    let val = self.stack.pop().unwrap();
 
                     match val {
                         Value::Boolean(false) | Value::Nil => {
@@ -279,13 +283,13 @@ impl VM {
                     self.stack.pop();
                 }
                 op::PRINT => {
-                    let val = self.stack.last().unwrap();
+                    let val = self.stack.pop().unwrap();
 
                     match val {
                         Value::Nil => println!("nil"),
                         Value::Number(n) => println!("{}", n),
                         Value::Boolean(b) => println!("{}", b),
-                        Value::Object(ptr) => println!("{}", self.memory.retrieve(ptr)),
+                        Value::Object(ptr) => println!("{}", self.memory.retrieve(&ptr)),
                     }
                 }
                 op::NIL => self.stack.push(Value::Nil),
@@ -383,11 +387,6 @@ impl VM {
         }
     }
 
-    pub fn read_constant(&mut self) -> &Value {
-        let index = *self.read_byte() as usize;
-        self.current_closure().chunk.constants.get(index).unwrap()
-    }
-
     pub(crate) fn current_closure(&self) -> &Function {
         let frame = self.frames.last().unwrap();
         self.memory.retrieve(&frame.closure).as_function()
@@ -422,6 +421,18 @@ impl VM {
         self.frames.last_mut().unwrap().ip += 1;
 
         self.current_closure().chunk.code.get(ip).unwrap()
+    }
+
+    pub fn read_constant(&mut self) -> &Value {
+        let index = *self.read_byte() as usize;
+        self.current_closure().chunk.constants.get(index).unwrap()
+    }
+
+    pub fn read_jump(&mut self) -> usize {
+        let high = *self.read_byte() as usize;
+        let low = *self.read_byte() as usize;
+
+        (high << 8) & low
     }
 
     pub fn is_string(&self, value: &Value) -> bool {

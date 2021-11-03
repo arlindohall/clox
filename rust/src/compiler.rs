@@ -435,29 +435,98 @@ impl<'a> Compiler<'a> {
     fn print_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after print statement.");
-        self.emit_bytes(op::PRINT, op::POP);
+        self.emit_byte(op::PRINT);
     }
 
     fn assert_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after assertion statement.");
-        self.emit_bytes(op::ASSERT, op::POP);
-    }
-
-    fn for_statement(&self) {
-        todo!("compile a for loop")
-    }
-
-    fn if_statement(&self) {
-        todo!("compile an if statement")
+        self.emit_byte(op::ASSERT);
     }
 
     fn return_statement(&self) {
         todo!("compile a return statement")
     }
 
+    fn for_statement(&self) {
+        todo!("compile a for loop")
+    }
+
+    fn if_statement(&mut self) {
+        self.consume(LeftParen, "Expect '(' after if keyword.");
+        self.expression();
+        self.consume(RightParen, "Expect ')' after if condition.");
+
+        // The if branch starts after the jump instruction, which is three bytes,
+        // which would put it two bytes ahead of the `len` since len is one more
+        // than the current "ip".
+        //
+        // We track the actual location of the jump instruction
+        let then_jump = self.function().chunk.code.len();
+
+        self.emit_byte(op::JUMP_IF_FALSE);
+        self.emit_bytes(0, 0); // We'll patch these after the else block
+
+        // Emit bytecode for the then branch, use statement so we don't have to
+        // consume a block: this could just be a single expression statement
+        self.statement();
+
+        // The else branch is where we jump to, so we'll use the current "ip" to
+        // patch the if branch, and we'll patch this jump instruction once we've
+        // emitted he else branch.
+        let else_jump = self.function().chunk.code.len();
+        self.patch_jump(then_jump, (else_jump + 3) - (then_jump + 2));
+
+        if !self.match_(Else) {
+            return;
+        }
+
+        self.emit_byte(op::JUMP);
+        self.emit_bytes(0, 0); // We'll patch these after the whole if/else
+
+        // Emit bytecode for else branch, same reasoning as then branch
+        self.statement();
+
+        // The first instruction executed outside the loop
+        let end = self.function().chunk.code.len();
+
+        self.patch_jump(else_jump, end - (else_jump + 2));
+    }
+
     fn while_statement(&self) {
         todo!("compile a while statement")
+    }
+
+    fn jump_target(ip: usize) -> (u8, u8) {
+        let byte1 = (ip >> 8) & 0xff;
+        let byte1 = byte1 as u8;
+
+        let byte2 = ip & 0xff;
+        let byte2 = byte2 as u8;
+
+        (byte1, byte2)
+    }
+
+    /// Ammend a jump instruction's two bytes for target with the location
+    /// in the source code that it will jump to.
+    ///
+    /// `Patch_location` is the location in the source that the jump is
+    /// located. This should be the index in the bytecode of the actual
+    /// jump instruction, i.e. the instructions to be patched will be
+    /// (location + 1) and (location + 2). You can get this value by
+    /// measuring the length of the bytecode array just before emitting
+    /// a jump instruction.
+    ///
+    /// `Jump_target` is the instruction we want to patch to. This should
+    /// point to the index in the bytecode that we want to set the `ip`
+    /// to, the next instruction to execute. You can get this value by
+    /// measuring the length of the bytecode just before you emit the
+    /// instruction to jump to, or by adding three to the measured
+    /// `patch_location` for a jump instruction you want to jump past.
+    fn patch_jump(&mut self, patch_location: usize, ip_inc: usize) {
+        let (byte1, byte2) = Self::jump_target(ip_inc);
+        self.function().chunk.code[patch_location + 1] = byte1;
+        self.function().chunk.code[patch_location + 2] = byte2;
     }
 
     fn epxression_statement(&mut self) {
@@ -1029,7 +1098,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![op::CONSTANT, 0, op::PRINT, op::POP, op::RETURN]
+            vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
         );
     }
 
@@ -1040,7 +1109,7 @@ mod test {
 
         assert_eq!(
             bytecode.chunk.code,
-            vec![op::CONSTANT, 0, op::PRINT, op::POP, op::RETURN]
+            vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
         );
     }
 
@@ -1350,6 +1419,38 @@ mod test {
                 op::POP,
                 op::POP,
                 op::RETURN,
+            ]
+        )
+    }
+
+    #[test]
+    fn if_statement() {
+        let vm = compile_expression(
+            "
+            if (true) print 10;
+            else print 20;
+            "
+        );
+        let bytecode = function(&vm);
+
+        assert_eq!(
+            bytecode.chunk.code,
+            vec![
+                op::CONSTANT,
+                0,
+                op::JUMP_IF_FALSE,
+                0,
+                7,
+                op::CONSTANT,
+                1,
+                op::PRINT,
+                op::JUMP,
+                0,
+                4,
+                op::CONSTANT,
+                2,
+                op::PRINT,
+                op::RETURN
             ]
         )
     }

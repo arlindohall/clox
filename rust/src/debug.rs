@@ -46,28 +46,30 @@ impl Disassembler for Function {
 
             let action = match op {
                 ADD => Self::print_instruction,
+                AND => Self::print_instruction,
                 ASSERT => Self::print_instruction,
                 CONSTANT => Self::print_constant,
                 DEFINE_GLOBAL => Self::print_constant,
+                DIVIDE => Self::print_instruction,
+                EQUAL => Self::print_instruction,
                 GET_GLOBAL => Self::print_constant,
-                SET_GLOBAL => Self::print_constant,
                 GET_LOCAL => Self::print_local,
-                SET_LOCAL => Self::print_local,
+                GREATER => Self::print_instruction,
+                GREATER_EQUAL => Self::print_instruction,
+                JUMP => Self::print_jump,
+                JUMP_IF_FALSE => Self::print_jump,
+                MULTIPLY => Self::print_instruction,
+                NEGATE => Self::print_instruction,
                 NIL => Self::print_instruction,
+                NOT => Self::print_instruction,
+                OR => Self::print_instruction,
                 POP => Self::print_instruction,
                 PRINT => Self::print_instruction,
                 RETURN => Self::print_instruction,
-                NEGATE => Self::print_instruction,
-                NOT => Self::print_instruction,
+                SET_GLOBAL => Self::print_constant,
+                SET_LOCAL => Self::print_local,
                 SUBTRACT => Self::print_instruction,
-                AND => Self::print_instruction,
-                DIVIDE => Self::print_instruction,
-                EQUAL => Self::print_instruction,
-                GREATER => Self::print_instruction,
-                GREATER_EQUAL => Self::print_instruction,
-                OR => Self::print_instruction,
-                MULTIPLY => Self::print_instruction,
-                22_u8..=u8::MAX => panic!("Invalid opcode."),
+                24_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op.bytecode_name());
@@ -112,7 +114,9 @@ impl GraphAssembly for Function {
                 GREATER_EQUAL => Self::graph_instruction,
                 OR => Self::graph_instruction,
                 MULTIPLY => Self::graph_instruction,
-                22_u8..=u8::MAX => panic!("Invalid opcode."),
+                JUMP => Self::graph_jump,
+                JUMP_IF_FALSE => Self::graph_jump,
+                24_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op);
@@ -171,6 +175,11 @@ impl DebugTrace for VM {
 }
 
 impl Function {
+
+    fn graph_jump(&self, i: usize, op: u8) -> usize {
+        todo!("graph jump instruction with arrow to jump point {} {}", i, op)
+    }
+
     fn graph_local(&self, i: usize, op: u8) -> usize {
         let c = *self.chunk.code.get(i + 1).unwrap();
         let c = self.chunk.constants.get(c as usize).unwrap();
@@ -202,12 +211,23 @@ impl Function {
         i + 1
     }
 
+    fn print_jump(&self, i: usize, op: String) -> usize {
+        let byte1 = *self.chunk.code.get(i + 1).unwrap();
+        let byte2 = *self.chunk.code.get(i + 2).unwrap();
+        let jump = Self::read_jump(byte1, byte2);
+        let line_part = self.get_line_part(i);
+
+        eprintln!("{:04} {}{:16} -> {:6}", i, line_part, op, jump);
+
+        i + 3
+    }
+
     fn print_local(&self, i: usize, op: String) -> usize {
         // todo: graph the values instead of the pointer
         let val = self.chunk.code.get(i + 1).unwrap();
         let line_part = self.get_line_part(i);
 
-        eprintln!("{:04} {}{:16}{:4}", i, line_part, op, val,);
+        eprintln!("{:04} {}{:16}{:10}", i, line_part, op, val);
         i + 2
     }
 
@@ -217,7 +237,7 @@ impl Function {
         let line_part = self.get_line_part(i);
 
         eprintln!(
-            "{:04} {}{:16}{:4} '{}'",
+            "{:04} {}{:16}{:10} '{}'",
             i,
             line_part,
             op,
@@ -245,6 +265,13 @@ impl Function {
         } else {
             format!("{:<4}", "|")
         }
+    }
+
+    fn read_jump(byte1: u8, byte2: u8) -> usize {
+        let high = byte1 as usize;
+        let low = byte2 as usize;
+
+        (high << 8) | low
     }
 }
 
@@ -278,6 +305,8 @@ impl DisassembleInstruction for u8 {
             GET_LOCAL => String::from("OP_GET_LOCAL"),
             GREATER => String::from("OP_GREATER"),
             GREATER_EQUAL => String::from("OP_GREATER_EQUAL"),
+            JUMP => String::from("OP_JUMP"),
+            JUMP_IF_FALSE => String::from("OP_JUMP_IF_FALSE"),
             MULTIPLY => String::from("OP_MULTIPLY"),
             NEGATE => String::from("OP_NEGATE"),
             NIL => String::from("OP_NIL"),
@@ -289,7 +318,7 @@ impl DisassembleInstruction for u8 {
             SET_GLOBAL => String::from("OP_SET_GLOBAL"),
             SET_LOCAL => String::from("OP_SET_LOCAL"),
             SUBTRACT => String::from("OP_SUBTRACT"),
-            22_u8..=u8::MAX => panic!("Invalid Opcode."),
+            24_u8..=u8::MAX => panic!("Invalid Opcode."),
         }
     }
 }
