@@ -457,10 +457,20 @@ impl VM {
         let op = *self.current_closure().chunk.code.get(ip).unwrap();
         let op = op.bytecode_name();
 
+        let show_val = |v: &Value| -> String {
+            match v {
+                Value::Object(ptr) => format!(
+                    "{}",
+                    self.memory.retrieve(ptr)
+                ),
+                _ => format!("{}", v)
+            }
+        };
+
         let stack = self
             .stack
             .iter()
-            .map(|v| format!("{}", v))
+            .map(show_val)
             .collect::<Vec<String>>()
             .join(", ");
         eprintln!("{:04} {}{:16} {}", ip, line_part, op, stack);
