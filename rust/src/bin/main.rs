@@ -88,3 +88,39 @@ impl Lox {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    macro_rules! script_test {
+        ($name:ident, $filename:literal) => {
+            #[test]
+            fn $name() -> Result<(), std::io::Error> {
+                let mut contents = String::new();
+
+                let mut filename = String::from("assets/");
+                filename.push_str($filename);
+                filename.push_str(".lox");
+
+                let mut test_script = File::open(filename)?;
+
+                test_script.read_to_string(&mut contents)?;
+
+                match VM::default().interpret(contents.as_str()) {
+                    Ok(_) => (),
+                    Err((_vm, err)) => panic!("Failing test because of error:\n{}", err),
+                }
+
+                Ok(())
+            }
+        };
+    }
+
+    script_test! { run_file_var, "var" }
+    script_test! { run_file_block_scope, "block-scope"}
+    script_test! { run_file_expr, "expr" }
+    script_test! { run_file_print, "print" }
+    script_test! { run_file_simple, "simple" }
+}

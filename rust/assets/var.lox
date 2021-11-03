@@ -1,0 +1,11 @@
+var num = 10;
+var str = "hello";
+
+num = str;
+num = 5;
+
+str = str + ", goodbye";
+num = num - 2;
+
+print str;
+print num;

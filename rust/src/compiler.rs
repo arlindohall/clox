@@ -1431,7 +1431,7 @@ mod test {
             "
             if (true) print 10;
             else print 20;
-            "
+            ",
         );
         let bytecode = function(&vm);
 
@@ -1462,7 +1462,7 @@ mod test {
         let vm = compile_expression(
             "
             if (true) print 10;
-            "
+            ",
         );
         let bytecode = function(&vm);
 

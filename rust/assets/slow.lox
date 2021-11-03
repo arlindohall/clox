@@ -1,0 +1,36 @@
+// This program is intended to be as slow as possible to really show
+// the speed up of the bytecode interpreter
+
+var start = clock();
+
+var sum = 0;
+var nums = list();
+var iterations = 200;
+
+class Example {
+    act(n) {
+        return 5 + n;
+    }
+}
+
+for (var i = 0; i < iterations; i = i + 1) {
+    // print "Creating the " + i.to_string() + "th example";
+    var ex = Example();
+    nums.push(ex);
+}
+
+for (var i = 0; i < iterations; i = i + 1) {
+    // print "Running the " + i.to_string() + "th example";
+    var me = nums.get(i);
+    me.act(1);
+}
+
+for (var i = 0; i < iterations; i = i + 1) {
+    // print "Removing the " + i.to_string() + "th example";
+    var me = nums.pop();
+    me.act(1);
+}
+
+var stop = clock();
+
+print ((stop - start) / 1000).to_string() + " seconds";

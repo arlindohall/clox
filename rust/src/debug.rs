@@ -175,9 +175,12 @@ impl DebugTrace for VM {
 }
 
 impl Function {
-
     fn graph_jump(&self, i: usize, op: u8) -> usize {
-        todo!("graph jump instruction with arrow to jump point {} {}", i, op)
+        todo!(
+            "graph jump instruction with arrow to jump point {} {}",
+            i,
+            op
+        )
     }
 
     fn graph_local(&self, i: usize, op: u8) -> usize {
