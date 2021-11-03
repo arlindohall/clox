@@ -1032,42 +1032,54 @@ mod test {
     use super::*;
     use crate::{debug::Disassembler, vm::LoxError::ScanError};
 
-    fn function(vm: &VM) -> &Function {
-        vm.memory.retrieve(&crate::object::mem(0)).as_function()
+    macro_rules! compile_expression {
+        ($bytecode:ident, $vm:ident, $name:ident, $text:literal, $test_case:expr) => {
+            #[test]
+            fn $name() {
+                let mut $vm = VM::default();
+                let compiler = Compiler::new(&mut $vm);
+
+                let $vm = match compiler.compile($text) {
+                    Ok(_) => {
+                        $vm.memory
+                            .retrieve(&crate::object::mem(0))
+                            .as_function()
+                            .disassemble_chunk();
+                        $vm
+                    }
+                    Err(e) => {
+                        println!("Error in test: {}", e);
+                        panic!("Failing test: expected code to compile.")
+                    }
+                };
+                let $bytecode = $vm.memory.retrieve(&crate::object::mem(0)).as_function();
+
+                assert_eq!($bytecode.chunk.code, $test_case)
+            }
+        };
     }
 
-    fn compile_expression(expr: &str) -> VM {
-        let mut vm = VM::default();
-        let compiler = Compiler::new(&mut vm);
+    macro_rules! compile_broken {
+        ($errors:ident, $name:ident, $text:literal, $test_case:expr) => {
+            #[test]
+            fn $name() {
+                let mut vm = VM::default();
+                let compiler = Compiler::new(&mut vm);
 
-        match compiler.compile(expr) {
-            Ok(_) => {
-                function(&vm).disassemble_chunk();
-                vm
+                let mut err = compiler.compile($text).unwrap_err();
+                let mut $errors = err.errors();
+
+                $test_case
             }
-            Err(e) => {
-                println!("Error in test: {}", e);
-                panic!("Failing test: expected code to compile.")
-            }
-        }
-    }
-
-    fn compile_broken(expr: &str) -> (LoxErrorChain, VM) {
-        let mut vm = VM::default();
-        let compiler = Compiler::new(&mut vm);
-
-        (compiler.compile(expr).unwrap_err(), vm)
+        };
     }
 
     #[test]
-    fn compile_variable_declaration() {
-        let vm = compile_expression("var x;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
-        );
+    fn constants_in_variable_declaration() {
+        let mut vm = VM::default();
+        let compiler = Compiler::new(&mut vm);
+        let fun = compiler.compile("var x;").unwrap();
+        let bytecode = vm.memory.retrieve(&fun).as_function();
 
         assert_eq!(1, bytecode.chunk.constants.len());
 
@@ -1082,289 +1094,139 @@ mod test {
         }
     }
 
-    #[test]
-    fn compile_simple_integer_expression() {
-        let vm = compile_expression("1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::CONSTANT, 0, op::POP, op::RETURN]
-        );
+    compile_expression! {
+        bytecode, vm,
+        compile_variable_declaration,
+        "var x;",
+        vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    #[test]
-    fn compile_print_expression() {
-        let vm = compile_expression("print 1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
-        );
+    compile_expression! {
+        bytecode, vm,
+        compile_simple_integer_expression,
+        "1;",
+        vec![op::CONSTANT, 0, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn compile_print_string() {
-        let vm = compile_expression("print \"hello\";");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
-        );
+    compile_expression! {
+        bytecode, vm,
+        compile_print_expression,
+        "print 1;",
+        vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
     }
 
-    #[test]
-    fn add_two_numbers() {
-        let vm = compile_expression("1+1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                0,
-                op::ADD,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        compile_print_string,
+        "print \"hello\";",
+        vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
     }
 
-    #[test]
-    fn subtract_two_numbers() {
-        let vm = compile_expression("1-1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                0,
-                op::SUBTRACT,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        add_two_numbers,
+        "1+1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::ADD, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn multiply_two_numbers() {
-        let vm = compile_expression("1*1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                0,
-                op::MULTIPLY,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        subtract_two_numbers,
+        "1-1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::SUBTRACT, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn divide_two_numbers() {
-        let vm = compile_expression("1/1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                0,
-                op::DIVIDE,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        multiply_two_numbers,
+        "1*1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::MULTIPLY, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn negate_a_number() {
-        let vm = compile_expression("-1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::RETURN]
-        );
+    compile_expression! {
+        bytecode, vm,
+        divide_two_numbers,
+        "1/1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::DIVIDE, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn compare_for_equality() {
-        let vm = compile_expression("1 == 1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                0,
-                op::EQUAL,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        negate_a_number,
+        "-1;",
+        vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn greater_than_numbers() {
-        let vm = compile_expression("2 > 1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                1,
-                op::GREATER,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        compare_for_equality,
+        "1 == 1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::EQUAL, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn greater_than_equal_numbers() {
-        let vm = compile_expression("2 >= 1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                1,
-                op::GREATER_EQUAL,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        greater_than_numbers,
+        "2 > 1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn less_than_numbers() {
-        let vm = compile_expression("2 < 1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                1,
-                op::GREATER_EQUAL,
-                op::NOT,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        greater_than_equal_numbers,
+        "2 >= 1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn less_than_equal_numbers() {
-        let vm = compile_expression("2 <= 1;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::CONSTANT,
-                1,
-                op::GREATER,
-                op::NOT,
-                op::POP,
-                op::RETURN,
-            ]
-        );
+    compile_expression! {
+        bytecode, vm,
+        less_than_numbers,
+        "2 < 1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::NOT, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn declare_variable() {
-        let vm = compile_expression("var x;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
-        )
+    compile_expression! {
+        bytecode, vm,
+        less_than_equal_numbers,
+        "2 <= 1;",
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::NOT, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn define_global_variable() {
-        let vm = compile_expression("var x = 10;");
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::RETURN]
-        )
+    compile_expression! {
+        bytecode, vm,
+        declare_variable,
+        "var x;",
+        vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    #[test]
-    fn define_and_reference_global_variable() {
-        let vm = compile_expression(
-            "var x = 10;
-            x;",
-        );
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                1,
-                op::DEFINE_GLOBAL,
-                0,
-                op::GET_GLOBAL,
-                0,
-                op::POP,
-                op::RETURN,
-            ]
-        )
+    compile_expression! {
+        bytecode, vm,
+        define_global_variable,
+        "var x = 10;",
+        vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    #[test]
-    fn simple_block_scope() {
-        let vm = compile_expression(
-            "
-            {
-                true;
-            }
+    compile_expression! {
+        bytecode, vm,
+        define_and_reference_global_variable,
+        "
+            var x = 10;
+            x;
         ",
-        );
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![op::CONSTANT, 0, op::POP, op::RETURN]
-        )
+        vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::GET_GLOBAL, 0, op::POP, op::RETURN]
     }
 
-    #[test]
-    fn block_scope_locals() {
-        let vm = compile_expression(
-            "
+    compile_expression! {
+        bytecode, vm,
+        simple_block_scope,
+        "{ true; }",
+        vec![op::CONSTANT, 0, op::POP, op::RETURN]
+    }
+
+    compile_expression! {
+        bytecode, vm,
+        block_scope_locals,
+        "
             var x = 10;
             {
                 var x = 20;
@@ -1373,144 +1235,123 @@ mod test {
                 var x = 30;
             }
         ",
-        );
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                1,
-                op::DEFINE_GLOBAL,
-                0,
-                op::CONSTANT,
-                2,
-                op::POP,
-                op::CONSTANT,
-                3,
-                op::POP,
-                op::RETURN,
-            ]
-        )
+        vec![
+            op::CONSTANT,
+            1,
+            op::DEFINE_GLOBAL,
+            0,
+            op::CONSTANT,
+            2,
+            op::POP,
+            op::CONSTANT,
+            3,
+            op::POP,
+            op::RETURN
+        ]
     }
 
-    #[test]
-    fn block_scope_locals_get_and_set() {
-        let vm = compile_expression(
-            "
+    compile_expression! {
+        bytecode, vm,
+        block_scope_locals_get_and_set,
+        "
             {
                 var x;
                 x = 10;
                 x;
             }
         ",
-        );
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::NIL,
-                op::CONSTANT,
-                0,
-                op::SET_LOCAL,
-                1,
-                op::POP,
-                op::GET_LOCAL,
-                1,
-                op::POP,
-                op::POP,
-                op::RETURN,
-            ]
-        )
+        vec![
+            op::NIL,
+            op::CONSTANT,
+            0,
+            op::SET_LOCAL,
+            1,
+            op::POP,
+            op::GET_LOCAL,
+            1,
+            op::POP,
+            op::POP,
+            op::RETURN,
+        ]
     }
 
-    #[test]
-    fn if_statement() {
-        let vm = compile_expression(
-            "
+    compile_expression! {
+        bytecode, vm,
+        if_statement,
+        "
             if (true) print 10;
             else print 20;
-            ",
-        );
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::JUMP_IF_FALSE,
-                0,
-                7,
-                op::CONSTANT,
-                1,
-                op::PRINT,
-                op::JUMP,
-                0,
-                4,
-                op::CONSTANT,
-                2,
-                op::PRINT,
-                op::RETURN
-            ]
-        )
+        ",
+        vec![
+            op::CONSTANT,
+            0,
+            op::JUMP_IF_FALSE,
+            0,
+            7,
+            op::CONSTANT,
+            1,
+            op::PRINT,
+            op::JUMP,
+            0,
+            4,
+            op::CONSTANT,
+            2,
+            op::PRINT,
+            op::RETURN
+        ]
     }
 
-    #[test]
-    fn if_statement_no_else() {
-        let vm = compile_expression(
-            "
+    compile_expression! {
+        bytecode, vm,
+        if_statement_no_else,
+        "
             if (true) print 10;
-            ",
-        );
-        let bytecode = function(&vm);
-
-        assert_eq!(
-            bytecode.chunk.code,
-            vec![
-                op::CONSTANT,
-                0,
-                op::JUMP_IF_FALSE,
-                0,
-                4,
-                op::CONSTANT,
-                1,
-                op::PRINT,
-                op::RETURN
-            ]
-        )
+        ",
+        vec![
+            op::CONSTANT,
+            0,
+            op::JUMP_IF_FALSE,
+            0,
+            4,
+            op::CONSTANT,
+            1,
+            op::PRINT,
+            op::RETURN
+        ]
     }
 
-    #[test]
-    fn compile_error_incomplete_var_expression() {
-        let (mut err, _vm) = compile_broken("var;");
-        let mut errors = err.errors();
-
-        assert!(matches!(errors.pop().unwrap(), ParseError { .. }));
-        assert!(matches!(errors.pop(), None));
+    compile_broken! {
+        errors,
+        compile_error_incomplete_var_expression,
+        "var;",
+        {
+            assert!(matches!(errors.pop().unwrap(), ParseError { .. }));
+            assert!(matches!(errors.pop(), None));
+        }
     }
 
-    #[test]
-    fn compile_error_unexpected_end_of_expr() {
-        let (mut err, _vm) = compile_broken(";");
-        let mut errors = err.errors();
+    compile_broken! {
+        errors,
+        compile_error_unexpected_end_of_expr,
+        ";",
+        {
+            assert_eq!(2, errors.len());
 
-        assert_eq!(2, errors.len());
+            let expr_err = errors.pop().unwrap();
+            let semi_err = errors.pop().unwrap();
 
-        let expr_err = errors.pop().unwrap();
-        let semi_err = errors.pop().unwrap();
-
-        assert!(matches!(&expr_err, ParseError { .. }));
-        assert!(matches!(&semi_err, ParseError { .. }));
+            assert!(matches!(&expr_err, ParseError { .. }));
+            assert!(matches!(&semi_err, ParseError { .. }));
+        }
     }
 
-    #[test]
-    fn compile_error_unterminated_string() {
-        let (mut err, _vm) = compile_broken("\"a");
-        let mut errors = err.errors();
-
-        assert_eq!(1, errors.len());
-        assert!(matches!(errors.pop().unwrap(), ScanError { .. }));
+    compile_broken! {
+        errors,
+        compile_error_unterminated_string,
+        "\"a",
+        {
+            assert_eq!(1, errors.len());
+            assert!(matches!(errors.pop().unwrap(), ScanError { .. }));
+        }
     }
 }
