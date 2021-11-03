@@ -347,18 +347,10 @@ impl VM {
                     self.stack.push(Value::Boolean(v1 && v2))
                 }
                 op::EQUAL => {
-                    let v1 = self.stack.pop().unwrap();
-                    let v2 = self.stack.pop().unwrap();
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
 
-                    let equal = match (v1, v2) {
-                        (Value::Number(n1), Value::Number(n2)) => (n2 - n1).abs() <= f64::EPSILON,
-                        (Value::Boolean(b1), Value::Boolean(b2)) => b1 == b2,
-                        (Value::Nil, Value::Nil) => true,
-                        (Value::Object(o1), Value::Object(o2)) => o1 == o2,
-                        _ => false,
-                    };
-
-                    self.stack.push(Value::Boolean(equal))
+                    self.stack.push(Value::Boolean(a.strict_equals(&b)))
                 }
                 op::GREATER => {
                     let b = self.stack.pop().unwrap();

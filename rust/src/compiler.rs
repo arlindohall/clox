@@ -744,8 +744,20 @@ impl<'a> Compiler<'a> {
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
+        // Check if the exact constant is in the constant table -- this compares
+        // memory locations, so objects that are equal will not count here
+        for (i, constant) in self.function().chunk.constants.iter().enumerate() {
+            if constant.strict_equals(&value) {
+                return i as u8;
+            }
+        }
+
+        // If it's not a string then that's fine, just continue as normal
         if self.function().chunk.constants.len() >= 256 {
-            todo!("error handling for over-full constant table")
+            let token = self.copy_string();
+            let token = self.vm.memory.retrieve(&token).as_string().clone();
+            self.error(&format!("Too many constants ({}).", token));
+            0
         } else {
             self.function().chunk.constants.push(value);
             (self.function().chunk.constants.len() - 1) as u8
@@ -769,7 +781,13 @@ impl<'a> Compiler<'a> {
     }
 
     fn synchronize(&mut self) {
-        todo!("recover after an error")
+        // If there's an error, we'll skip ahead to the end of the statement/expression,
+        // or if the error happened at the last expression in a block, we look for the
+        // end of the block but don't consume it (that lets us compile the block correctly
+        // so that we can continue compiling the rest of the file)
+        while !self.match_(Semicolon) && !self.check(RightBrace) {
+            self.advance();
+        }
     }
 
     fn end_compiler(mut self) -> Result<MemoryEntry, LoxErrorChain> {
@@ -1037,7 +1055,7 @@ mod test {
                 op::CONSTANT,
                 0,
                 op::CONSTANT,
-                1,
+                0,
                 op::ADD,
                 op::POP,
                 op::RETURN,
@@ -1056,7 +1074,7 @@ mod test {
                 op::CONSTANT,
                 0,
                 op::CONSTANT,
-                1,
+                0,
                 op::SUBTRACT,
                 op::POP,
                 op::RETURN,
@@ -1075,7 +1093,7 @@ mod test {
                 op::CONSTANT,
                 0,
                 op::CONSTANT,
-                1,
+                0,
                 op::MULTIPLY,
                 op::POP,
                 op::RETURN,
@@ -1094,7 +1112,7 @@ mod test {
                 op::CONSTANT,
                 0,
                 op::CONSTANT,
-                1,
+                0,
                 op::DIVIDE,
                 op::POP,
                 op::RETURN,
@@ -1124,7 +1142,7 @@ mod test {
                 op::CONSTANT,
                 0,
                 op::CONSTANT,
-                1,
+                0,
                 op::EQUAL,
                 op::POP,
                 op::RETURN,
@@ -1248,7 +1266,7 @@ mod test {
                 op::DEFINE_GLOBAL,
                 0,
                 op::GET_GLOBAL,
-                2,
+                0,
                 op::POP,
                 op::RETURN,
             ]
