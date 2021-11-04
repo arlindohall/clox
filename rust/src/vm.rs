@@ -281,6 +281,12 @@ impl VM {
                     let new_value = self.stack.last().unwrap();
                     self.stack[index] = new_value.clone();
                 }
+                op::JUMP => {}
+                op::JUMP_IF_FALSE => {
+                    let jump = Self::read_jump(self);
+                    self.frames.last_mut().unwrap().ip += jump
+                }
+                op::LOOP => {}
                 op::POP => {
                     self.stack.pop();
                 }
@@ -384,7 +390,7 @@ impl VM {
 
                     self.stack.push(Value::Boolean(v1 || v2))
                 }
-                b => panic!("Invalid bytecode {}", b),
+                25_u8..=u8::MAX => panic!("Invalid bytecode {}", op),
             }
         }
     }
@@ -717,5 +723,10 @@ mod test {
 
             assert \"Hello, world!\" == x + \" \" + y;
         "
+    }
+
+    test_program! {
+        if_statement_no_else,
+        "if (true) assert true;"
     }
 }
