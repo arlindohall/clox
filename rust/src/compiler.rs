@@ -115,6 +115,18 @@ struct ParseRule {
     precedence: usize,
 }
 
+fn parse_rule(
+    prefix_rule: Option<ParseFn>,
+    infix_rule: Option<ParseFn>,
+    precedence: usize,
+) -> ParseRule {
+    ParseRule {
+        prefix_rule,
+        infix_rule,
+        precedence,
+    }
+}
+
 type ParseFn = fn(&mut Compiler, bool);
 
 use bigdecimal::BigDecimal;
@@ -684,211 +696,47 @@ impl<'a> Compiler<'a> {
 
     fn get_rule(&self, type_: &TokenType) -> ParseRule {
         match type_ {
-            And => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::AND,
-            },
-            Assert => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Bang => ParseRule {
-                prefix_rule: Some(unary),
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            BangEqual => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::EQUALITY,
-            },
-            Class => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Comma => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Dot => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(dot),
-                precedence: prec::CALL,
-            },
-            Else => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Eof => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Equal => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            EqualEqual => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::EQUALITY,
-            },
-            Error => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            False => ParseRule {
-                prefix_rule: Some(literal),
-                infix_rule: None,
-                precedence: prec::PRIMARY,
-            },
-            For => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Fun => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Greater => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::EQUALITY,
-            },
-            GreaterEqual => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::EQUALITY,
-            },
-            Identifier => ParseRule {
-                prefix_rule: Some(variable),
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            If => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            LeftBrace => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            LeftParen => ParseRule {
-                prefix_rule: Some(grouping),
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Less => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::EQUALITY,
-            },
-            LessEqual => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::EQUALITY,
-            },
-            Minus => ParseRule {
-                prefix_rule: Some(unary),
-                infix_rule: Some(binary),
-                precedence: prec::TERM,
-            },
-            TokenNil => ParseRule {
-                prefix_rule: Some(literal),
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            TokenNumber => ParseRule {
-                prefix_rule: Some(number),
-                infix_rule: None,
-                precedence: prec::ASSIGNMENT,
-            },
-            Or => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::OR,
-            },
-            Plus => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::TERM,
-            },
-            Print => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Return => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            RightBrace => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            RightParen => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Semicolon => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            Slash => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::FACTOR,
-            },
-            Star => ParseRule {
-                prefix_rule: None,
-                infix_rule: Some(binary),
-                precedence: prec::FACTOR,
-            },
-            TokenString => ParseRule {
-                prefix_rule: Some(string),
-                infix_rule: None,
-                precedence: prec::ASSIGNMENT,
-            },
-            Super => ParseRule {
-                prefix_rule: Some(super_),
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            This => ParseRule {
-                prefix_rule: Some(this_),
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            True => ParseRule {
-                prefix_rule: Some(literal),
-                infix_rule: None,
-                precedence: prec::PRIMARY,
-            },
-            Var => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
-            While => ParseRule {
-                prefix_rule: None,
-                infix_rule: None,
-                precedence: prec::NONE,
-            },
+            And => parse_rule(None, Some(binary), prec::AND),
+            Assert => parse_rule(None, None, prec::NONE),
+            Bang => parse_rule(Some(unary), None, prec::NONE),
+            BangEqual => parse_rule(None, Some(binary), prec::EQUALITY),
+            Class => parse_rule(None, None, prec::NONE),
+            Comma => parse_rule(None, None, prec::NONE),
+            Dot => parse_rule(None, Some(dot), prec::CALL),
+            Else => parse_rule(None, None, prec::NONE),
+            Eof => parse_rule(None, None, prec::NONE),
+            Equal => parse_rule(None, None, prec::NONE),
+            EqualEqual => parse_rule(None, Some(binary), prec::EQUALITY),
+            Error => parse_rule(None, None, prec::NONE),
+            False => parse_rule(Some(literal), None, prec::PRIMARY),
+            For => parse_rule(None, None, prec::NONE),
+            Fun => parse_rule(None, None, prec::NONE),
+            Greater => parse_rule(None, Some(binary), prec::EQUALITY),
+            GreaterEqual => parse_rule(None, Some(binary), prec::EQUALITY),
+            Identifier => parse_rule(Some(variable), None, prec::NONE),
+            If => parse_rule(None, None, prec::NONE),
+            LeftBrace => parse_rule(None, None, prec::NONE),
+            LeftParen => parse_rule(Some(grouping), None, prec::NONE),
+            Less => parse_rule(None, Some(binary), prec::EQUALITY),
+            LessEqual => parse_rule(None, Some(binary), prec::EQUALITY),
+            Minus => parse_rule(Some(unary), Some(binary), prec::TERM),
+            TokenNil => parse_rule(Some(literal), None, prec::NONE),
+            TokenNumber => parse_rule(Some(number), None, prec::ASSIGNMENT),
+            Or => parse_rule(None, Some(binary), prec::OR),
+            Plus => parse_rule(None, Some(binary), prec::TERM),
+            Print => parse_rule(None, None, prec::NONE),
+            Return => parse_rule(None, None, prec::NONE),
+            RightBrace => parse_rule(None, None, prec::NONE),
+            RightParen => parse_rule(None, None, prec::NONE),
+            Semicolon => parse_rule(None, None, prec::NONE),
+            Slash => parse_rule(None, Some(binary), prec::FACTOR),
+            Star => parse_rule(None, Some(binary), prec::FACTOR),
+            TokenString => parse_rule(Some(string), None, prec::ASSIGNMENT),
+            Super => parse_rule(Some(super_), None, prec::NONE),
+            This => parse_rule(Some(this_), None, prec::NONE),
+            True => parse_rule(Some(literal), None, prec::PRIMARY),
+            Var => parse_rule(None, None, prec::NONE),
+            While => parse_rule(None, None, prec::NONE),
         }
     }
 

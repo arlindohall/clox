@@ -1,5 +1,5 @@
-pub mod vm;
 pub mod debug;
+pub mod vm;
 
 mod compiler;
 mod object;
