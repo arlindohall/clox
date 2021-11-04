@@ -878,7 +878,7 @@ impl<'a> Compiler<'a> {
         // or if the error happened at the last expression in a block, we look for the
         // end of the block but don't consume it (that lets us compile the block correctly
         // so that we can continue compiling the rest of the file)
-        while !self.match_(Semicolon) && !self.check(RightBrace) {
+        while !self.match_(Semicolon) && !self.check(RightBrace) && !self.match_(Eof) {
             self.advance();
         }
     }
@@ -1073,7 +1073,7 @@ mod test {
     use super::*;
     use crate::{debug::Disassembler, vm::LoxError::ScanError};
 
-    macro_rules! test_expression {
+    macro_rules! test_program {
         ($bytecode:ident, $vm:ident, $name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
@@ -1100,7 +1100,7 @@ mod test {
         };
     }
 
-    macro_rules! test_broken_expression {
+    macro_rules! test_broken_program {
         ($errors:ident, $name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
@@ -1135,119 +1135,119 @@ mod test {
         }
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         compile_variable_declaration,
         "var x;",
         vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         compile_simple_integer_expression,
         "1;",
         vec![op::CONSTANT, 0, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         compile_print_expression,
         "print 1;",
         vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         compile_print_string,
         "print \"hello\";",
         vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         add_two_numbers,
         "1+1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::ADD, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         subtract_two_numbers,
         "1-1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::SUBTRACT, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         multiply_two_numbers,
         "1*1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::MULTIPLY, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         divide_two_numbers,
         "1/1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::DIVIDE, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         negate_a_number,
         "-1;",
         vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         compare_for_equality,
         "1 == 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::EQUAL, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         greater_than_numbers,
         "2 > 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         greater_than_equal_numbers,
         "2 >= 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         less_than_numbers,
         "2 < 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::NOT, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         less_than_equal_numbers,
         "2 <= 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::NOT, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         declare_variable,
         "var x;",
         vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         define_global_variable,
         "var x = 10;",
         vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         define_and_reference_global_variable,
         "
@@ -1257,14 +1257,14 @@ mod test {
         vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::GET_GLOBAL, 0, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         simple_block_scope,
         "{ true; }",
         vec![op::CONSTANT, 0, op::POP, op::RETURN]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         block_scope_locals,
         "
@@ -1291,7 +1291,7 @@ mod test {
         ]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         block_scope_locals_get_and_set,
         "
@@ -1316,7 +1316,7 @@ mod test {
         ]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         if_statement,
         "
@@ -1342,7 +1342,7 @@ mod test {
         ]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         if_statement_no_else,
         "
@@ -1361,7 +1361,7 @@ mod test {
         ]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         if_statement_with_block,
         "
@@ -1382,7 +1382,7 @@ mod test {
         ]
     }
 
-    test_expression! {
+    test_program! {
         bytecode, vm,
         while_statement,
         "
@@ -1406,7 +1406,7 @@ mod test {
         ]
     }
 
-    test_broken_expression! {
+    test_broken_program! {
         errors,
         compile_error_incomplete_var_expression,
         "var;",
@@ -1416,7 +1416,7 @@ mod test {
         }
     }
 
-    test_broken_expression! {
+    test_broken_program! {
         errors,
         compile_error_unexpected_end_of_expr,
         ";",
@@ -1431,7 +1431,7 @@ mod test {
         }
     }
 
-    test_broken_expression! {
+    test_broken_program! {
         errors,
         compile_error_unterminated_string,
         "\"a",
@@ -1439,5 +1439,13 @@ mod test {
             assert_eq!(1, errors.len());
             assert!(matches!(errors.pop().unwrap(), ScanError { .. }));
         }
+    }
+
+    // Should terminate
+    test_broken_program! {
+        _errors,
+        compile_error_should_terminate_at_eof,
+        "0",
+        ()
     }
 }
