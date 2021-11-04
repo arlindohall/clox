@@ -293,7 +293,10 @@ impl VM {
                     let jump = jump * condition;
                     self.frames.last_mut().unwrap().ip += jump;
                 }
-                op::LOOP => {}
+                op::LOOP => {
+                    let jump = self.read_jump();
+                    self.frames.last_mut().unwrap().ip -= jump;
+                }
                 op::POP => {
                     self.stack.pop();
                 }
@@ -764,6 +767,16 @@ mod test {
             else assert false;
 
             assert x == 3;
+        "
+    }
+
+    test_program! {
+        while_statement,
+        "
+            var x = 1;
+            while (x < 10) x = x + 1;
+
+            assert x == 10;
         "
     }
 }

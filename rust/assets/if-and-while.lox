@@ -17,12 +17,13 @@ if (y > x) {
 
 z = z + 8;
 
-//assert z == 15;
-//
-//while (z < 100) {
-//    z = z + 10;
-//    x = x * 2;
-//}
-//
-//assert z == 105;
-//assert x == 256;
+assert z == 15;
+
+z = 5;
+while (z < 100) {
+    z = z + 10;
+    x = x * 2;
+}
+
+assert z == 105;
+assert x == 1024;
