@@ -561,7 +561,7 @@ mod test {
                 match VM::default().interpret($text) {
                     Ok(_) => (),
                     Err((_, e)) => {
-                        println!("Error interpreting statement {}", e);
+                        println!("!!! Error interpreting statement\n{}", e);
                         panic!()
                     }
                 }
@@ -776,6 +776,21 @@ mod test {
             var x = 1;
             while (x < 10) x = x + 1;
 
+            assert x == 10;
+        "
+    }
+
+    test_program! {
+        for_statement,
+        "
+            var y = 0;
+            var x = 10;
+            for (var x = 0; x < 10; x = x + 1) {
+                assert x < 10;
+                assert x == y;
+                y = y + 1;
+            }
+            assert y == 10;
             assert x == 10;
         "
     }

@@ -321,6 +321,11 @@ impl<'a> Compiler<'a> {
         self.function_mut().chunk.code.push(op)
     }
 
+    fn emit_jump(&mut self, op: u8) {
+        self.emit_byte(op);
+        self.emit_bytes(0, 0); // Patch these later
+    }
+
     fn emit_return(&mut self) {
         self.emit_byte(op::RETURN)
     }
@@ -454,8 +459,7 @@ impl<'a> Compiler<'a> {
         self.consume(RightParen, "Expect ')' after if condition.");
 
         let else_jump = self.next_instruction();
-        self.emit_byte(op::JUMP_IF_FALSE);
-        self.emit_bytes(0, 0); // We'll patch these after the else block
+        self.emit_jump(op::JUMP_IF_FALSE); // We'll patch these after the else block
         let else_jump_from = self.next_instruction();
 
         // Emit bytecode for the then branch, use statement so we don't have to
@@ -469,8 +473,7 @@ impl<'a> Compiler<'a> {
         }
 
         let then_jump = self.next_instruction();
-        self.emit_byte(op::JUMP);
-        self.emit_bytes(0, 0); // We'll patch these after the whole if/else
+        self.emit_jump(op::JUMP); // We'll patch these after the whole if/else
         let else_jump_to = self.next_instruction();
         let then_jump_from = self.next_instruction();
 
@@ -479,6 +482,9 @@ impl<'a> Compiler<'a> {
         // emitted he else branch. Note that the current `ip` at the time when
         // we execute the jump is just *after* the second jump byte. That's
         // because we've just read both bytes.
+        //
+        // This could go at the end of the method, but I'll leave it hear so it's
+        // easier to read what's going on.
         self.patch_jump(else_jump, else_jump_to - else_jump_from);
 
         // Emit bytecode for else branch, same reasoning as then branch
@@ -493,6 +499,8 @@ impl<'a> Compiler<'a> {
     }
 
     fn while_statement(&mut self) {
+        // The below is better understood as a modification to the if
+        // statement, the comments are the same plus the loop.
         let loop_to = self.next_instruction();
 
         self.consume(LeftParen, "Expect '(' after while keyword.");
@@ -500,25 +508,79 @@ impl<'a> Compiler<'a> {
         self.consume(RightParen, "Expect ')' after while condition.");
 
         let jump_patch = self.next_instruction();
-        self.emit_byte(op::JUMP_IF_FALSE);
-        self.emit_bytes(0, 0);
+        self.emit_jump(op::JUMP_IF_FALSE);
         let jump_from = self.next_instruction();
 
         self.statement();
 
         let loop_patch = self.next_instruction();
-        self.emit_byte(op::LOOP);
-        self.emit_bytes(0, 0);
+        self.emit_jump(op::LOOP);
 
         let loop_from = self.next_instruction();
         let jump_to = self.next_instruction();
 
+        // Loop jumps are negated in the code, and we pass in a `usize`
+        // which can't overflow negative, so we reverse the arguments.
         self.patch_jump(loop_patch, loop_from - loop_to);
         self.patch_jump(jump_patch, jump_to - jump_from);
     }
 
-    fn for_statement(&self) {
-        todo!("compile a for loop")
+    fn for_statement(&mut self) {
+        // The loop iterator in a for statement act like they're in a
+        // new block all their own
+        self.begin_scope();
+
+        // Begin consuming the for statements, stopping at each ';'
+        self.consume(LeftParen, "Expect '(' after for keyword.");
+        self.declaration();
+
+        // Now we basically do a while loop with the next statement as the condition
+        // but with an extra fancy jump added in there.
+        let restart_loop_to = self.next_instruction();
+        self.expression();
+        self.consume(Semicolon, "Expect ';' after condition in for clause.");
+
+        // If the condition was true, we jump out of the loop
+        let exit_loop_patch = self.next_instruction();
+        self.emit_jump(op::JUMP_IF_FALSE);
+        let exit_loop_from = self.next_instruction();
+        // Otherwise we jump forward to the start of the loop body.
+        let start_body_patch = self.next_instruction();
+        self.emit_jump(op::JUMP);
+        let start_body_from = self.next_instruction();
+
+        // The loop iterator update
+        let update_iter_to = self.next_instruction();
+        self.expression();
+        self.emit_byte(op::POP);
+        self.consume(RightParen, "Expect ')' after for clauses.");
+
+        // Jump back to the beginning of the loop where we check the condition
+        let restart_loop_patch = self.next_instruction();
+        self.emit_jump(op::LOOP);
+        let restart_loop_from = self.next_instruction();
+
+        // Loop body
+        let start_body_to = self.next_instruction();
+        self.statement();
+
+        // Jump back to the iterator update
+        let update_iter_patch = self.next_instruction();
+        self.emit_jump(op::LOOP);
+        let update_iter_from = self.next_instruction();
+
+        // Now we're done with the for bytecode, so this is where we jump to
+        // when we exit the loop
+        let exit_loop_to = self.next_instruction();
+
+        // Now we patch all the jumps together so the rest of
+        // the control flow is easier to follow.
+        self.patch_jump(start_body_patch, start_body_to - start_body_from);
+        self.patch_jump(update_iter_patch, update_iter_from - update_iter_to); // loop
+        self.patch_jump(restart_loop_patch, restart_loop_from - restart_loop_to); // loop
+        self.patch_jump(exit_loop_patch, exit_loop_to - exit_loop_from);
+
+        self.end_scope();
     }
 
     fn jump_target(ip: usize) -> (u8, u8) {
