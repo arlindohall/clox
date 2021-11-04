@@ -281,10 +281,17 @@ impl VM {
                     let new_value = self.stack.last().unwrap();
                     self.stack[index] = new_value.clone();
                 }
-                op::JUMP => {}
+                op::JUMP => {
+                    let jump = self.read_jump();
+                    self.frames.last_mut().unwrap().ip += jump;
+                }
                 op::JUMP_IF_FALSE => {
-                    let jump = Self::read_jump(self);
-                    self.frames.last_mut().unwrap().ip += jump
+                    let condition = self.stack.pop().unwrap().as_boolean() as usize;
+                    let condition = 1 - condition;
+
+                    let jump = self.read_jump();
+                    let jump = jump * condition;
+                    self.frames.last_mut().unwrap().ip += jump;
                 }
                 op::LOOP => {}
                 op::POP => {
@@ -440,7 +447,7 @@ impl VM {
         let high = *self.read_byte() as usize;
         let low = *self.read_byte() as usize;
 
-        (high << 8) & low
+        (high << 8) | low
     }
 
     pub fn is_string(&self, value: &Value) -> bool {
@@ -727,6 +734,36 @@ mod test {
 
     test_program! {
         if_statement_no_else,
-        "if (true) assert true;"
+        "
+        var x = 1;
+        if (true) x = 2;
+
+        assert x == 2;
+        "
+    }
+
+    test_program! {
+        if_statement_with_statement_after,
+        "
+        var x = 1;
+        if (false) assert false;
+
+        assert x == 1;"
+    }
+
+    test_program! {
+        if_statement,
+        "
+            var x = 1;
+            if (false) assert false;
+            else x = 2;
+
+            assert x == 2;
+
+            if (true) x = 3;
+            else assert false;
+
+            assert x == 3;
+        "
     }
 }

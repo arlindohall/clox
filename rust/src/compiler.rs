@@ -317,8 +317,8 @@ impl<'a> Compiler<'a> {
 
     fn emit_byte(&mut self, op: u8) {
         let line = self.parser.previous.line;
-        self.function().chunk.lines.push(line);
-        self.function().chunk.code.push(op)
+        self.function_mut().chunk.lines.push(line);
+        self.function_mut().chunk.code.push(op)
     }
 
     fn emit_return(&mut self) {
@@ -453,65 +453,68 @@ impl<'a> Compiler<'a> {
         self.expression();
         self.consume(RightParen, "Expect ')' after if condition.");
 
-        // The if branch starts after the jump instruction, which is three bytes,
-        // which would put it two bytes ahead of the `len` since len is one more
-        // than the current "ip".
-        //
-        // We track the actual location of the jump instruction
-        let then_jump = self.function().chunk.code.len();
-
+        let else_jump = self.next_instruction();
         self.emit_byte(op::JUMP_IF_FALSE);
         self.emit_bytes(0, 0); // We'll patch these after the else block
+        let else_jump_from = self.next_instruction();
 
         // Emit bytecode for the then branch, use statement so we don't have to
         // consume a block: this could just be a single expression statement
         self.statement();
 
         if !self.match_(Else) {
-            let end = self.function().chunk.code.len();
-            self.patch_jump(then_jump, end - (then_jump + 2));
+            let else_jump_to = self.next_instruction();
+            self.patch_jump(else_jump, else_jump_to - else_jump_from);
             return;
         }
 
-        // The else branch is where we jump to, so we'll use the current "ip" to
-        // patch the if branch, and we'll patch this jump instruction once we've
-        // emitted he else branch.
-        let else_jump = self.function().chunk.code.len();
-        self.patch_jump(then_jump, (else_jump + 3) - (then_jump + 2));
-
+        let then_jump = self.next_instruction();
         self.emit_byte(op::JUMP);
         self.emit_bytes(0, 0); // We'll patch these after the whole if/else
+        let else_jump_to = self.next_instruction();
+        let then_jump_from = self.next_instruction();
+
+        // The else branch is where we jump to, so we'll use the current `ip` to
+        // patch the if branch, and we'll patch this jump instruction once we've
+        // emitted he else branch. Note that the current `ip` at the time when
+        // we execute the jump is just *after* the second jump byte. That's
+        // because we've just read both bytes.
+        self.patch_jump(else_jump, else_jump_to - else_jump_from);
 
         // Emit bytecode for else branch, same reasoning as then branch
         self.statement();
 
         // The first instruction executed outside the loop
-        let end = self.function().chunk.code.len();
+        let then_jump_to = self.next_instruction();
 
-        self.patch_jump(else_jump, end - (else_jump + 2));
+        // Note we only need to execute the then jump if there is an else branch,
+        // thus we return early above when if we don't match `Else`
+        self.patch_jump(then_jump, then_jump_to - then_jump_from);
     }
 
     fn while_statement(&mut self) {
-        let pre_condition = self.function().chunk.code.len();
+        let loop_to = self.next_instruction();
 
         self.consume(LeftParen, "Expect '(' after while keyword.");
         self.expression();
         self.consume(RightParen, "Expect ')' after while condition.");
 
-        let condition_jump = self.function().chunk.code.len();
-
+        let jump_patch = self.next_instruction();
         self.emit_byte(op::JUMP_IF_FALSE);
         self.emit_bytes(0, 0);
+        let jump_from = self.next_instruction();
 
         self.statement();
 
-        let loop_patch = self.function().chunk.code.len();
-
+        let loop_patch = self.next_instruction();
         self.emit_byte(op::LOOP);
         self.emit_bytes(0, 0);
 
-        self.patch_jump(loop_patch, (loop_patch + 2) - pre_condition);
-        self.patch_jump(condition_jump, (loop_patch + 3) - (condition_jump + 2));
+        let loop_from = self.next_instruction();
+        let jump_to = self.next_instruction();
+
+        self.patch_jump(loop_patch, loop_from - loop_to);
+        self.patch_jump(jump_patch, jump_to - jump_from);
     }
 
     fn for_statement(&self) {
@@ -546,8 +549,8 @@ impl<'a> Compiler<'a> {
     /// `patch_location` for a jump instruction you want to jump past.
     fn patch_jump(&mut self, patch_location: usize, ip_inc: usize) {
         let (byte1, byte2) = Self::jump_target(ip_inc);
-        self.function().chunk.code[patch_location + 1] = byte1;
-        self.function().chunk.code[patch_location + 2] = byte2;
+        self.function_mut().chunk.code[patch_location + 1] = byte1;
+        self.function_mut().chunk.code[patch_location + 2] = byte2;
     }
 
     fn epxression_statement(&mut self) {
@@ -849,7 +852,7 @@ impl<'a> Compiler<'a> {
             self.error(&format!("Too many constants ({}).", token));
             0
         } else {
-            self.function().chunk.constants.push(value);
+            self.function_mut().chunk.constants.push(value);
             (self.function().chunk.constants.len() - 1) as u8
         }
     }
@@ -897,11 +900,30 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn function(&mut self) -> &mut Function {
+    fn function_mut(&mut self) -> &mut Function {
         self.vm
             .memory
             .retrieve_mut(&self.function)
             .as_mut_function()
+    }
+
+    fn function(&self) -> &Function {
+        self.vm.memory.retrieve(&self.function).as_function()
+    }
+
+    /// The location of the next instruction.
+    ///
+    /// This is a helper for creating and patching jumps. When called, it
+    /// has the value of the instruction that will be run directly after the
+    /// instruction that was last emitted. In the case of jumps, if you call
+    /// this before emitting the jump, it points to the jump/loop itself.
+    ///
+    /// If you call this right after emitting a jump, it will point to
+    /// whatever logic runs if the jump condition fails or whatever was
+    /// emitted righ after the "body" of the previous jump (in the case
+    /// of the unconditional jump of an if statement)
+    fn next_instruction(&self) -> usize {
+        self.function().chunk.code.len()
     }
 
     fn named_variable(&mut self, can_assign: bool) {
@@ -1306,13 +1328,13 @@ mod test {
             0,
             op::JUMP_IF_FALSE,
             0,
-            7,
+            6,
             op::CONSTANT,
             1,
             op::PRINT,
             op::JUMP,
             0,
-            4,
+            3,
             op::CONSTANT,
             2,
             op::PRINT,
@@ -1331,7 +1353,7 @@ mod test {
             0,
             op::JUMP_IF_FALSE,
             0,
-            4,
+            3,
             op::CONSTANT,
             1,
             op::PRINT,
@@ -1352,7 +1374,7 @@ mod test {
             0,
             op::JUMP_IF_FALSE,
             0,
-            4,
+            3,
             op::CONSTANT,
             1,
             op::POP,
@@ -1373,13 +1395,13 @@ mod test {
             0,
             op::JUMP_IF_FALSE,
             0,
-            7,
+            6,
             op::CONSTANT,
             1,
             op::POP,
             op::LOOP,
             0,
-            10,
+            11,
             op::RETURN
         ]
     }
