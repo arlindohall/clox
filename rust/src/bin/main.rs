@@ -98,6 +98,10 @@ mod test {
         ($name:ident, $filename:literal) => {
             #[test]
             fn $name() -> Result<(), std::io::Error> {
+                unsafe {
+                    loxvm::debug::DEBUG_PRINT_CODE = true;
+                    loxvm::debug::DEBUG_TRACE_EXECUTION = true;
+                }
                 let mut contents = String::new();
 
                 let mut filename = String::from("assets/");

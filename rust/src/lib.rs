@@ -1,7 +1,7 @@
 pub mod vm;
+pub mod debug;
 
 mod compiler;
-mod debug;
 mod object;
 mod scanner;
 mod value;
