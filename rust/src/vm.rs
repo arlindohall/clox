@@ -562,6 +562,8 @@ mod test {
                     crate::debug::DEBUG_PRINT_CODE = true;
                     crate::debug::DEBUG_TRACE_EXECUTION = true;
                 }
+
+                println!("Interpreting program:\n{}", $text);
                 match VM::default().interpret($text) {
                     Ok(_) => (),
                     Err((_, e)) => {
@@ -811,7 +813,7 @@ mod test {
     test_program! {
         define_function,
         "
-            let f = 10;
+            var f = 10;
             {
                 fun f(a, b) {
                     assert true;
