@@ -117,11 +117,11 @@ impl Scanner {
         text.chars().collect()
     }
 
-    pub fn copy_segment(&self, token: &Token) -> Box<String> {
+    pub fn copy_segment(&self, token: &Token) -> String {
         let start = token.start;
         let end = start + token.length;
 
-        Box::new(self.source[start..end].iter().collect())
+        self.source[start..end].iter().collect()
     }
 
     /// Scan a single token from the source and return.

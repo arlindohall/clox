@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
+use crate::compiler::Parser;
 use crate::compiler::{Compiler, Function};
 use crate::debug::DebugTrace;
 use crate::object::{Memory, MemoryEntry, Object};
+use crate::scanner::Scanner;
 use crate::value::Value;
 
 const MAX_FRAMES: usize = 265;
@@ -141,7 +143,9 @@ impl VM {
     /// execute the bytecode, all in the context of the VM that
     /// is set up with [new](#method.new).
     pub fn interpret(mut self, statement: &str) -> Result<VM, (VM, LoxErrorChain)> {
-        let compiler = Compiler::new(&mut self);
+        let mut scanner = Scanner::default();
+        let mut parser = Parser::default();
+        let compiler = Compiler::new(&mut scanner, &mut parser, &mut self);
 
         // Pass in the VM that calls the compiler so that the
         // compiler can swap itself out for a child compiler
@@ -792,6 +796,29 @@ mod test {
             }
             assert y == 10;
             assert x == 10;
+        "
+    }
+
+    test_program! {
+        define_function_global,
+        "
+            fun f(a, b) {
+                assert true;
+            }
+        "
+    }
+
+    test_program! {
+        define_function,
+        "
+            let f = 10;
+            {
+                fun f(a, b) {
+                    assert true;
+                }
+            }
+
+            assert f == 10;
         "
     }
 }

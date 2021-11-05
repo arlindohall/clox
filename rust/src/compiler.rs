@@ -24,11 +24,8 @@ const UNINITIALIZED: isize = -1;
 #[derive(Debug)]
 pub struct Compiler<'a> {
     vm: &'a mut VM,
-
-    ancestors: Vec<Compiler<'a>>,
-
-    scanner: Scanner,
-    parser: Parser,
+    scanner: &'a mut Scanner,
+    parser: &'a mut Parser,
 
     function: MemoryEntry,
     locals: Vec<Local>,
@@ -47,11 +44,21 @@ pub struct Local {
 
 /// The parser that does all the work creating the bytecode.
 #[derive(Debug)]
-struct Parser {
+pub struct Parser {
     current: Token,
     previous: Token,
 
     panic_mode: bool,
+}
+
+impl Default for Parser {
+    fn default() -> Self {
+        Self {
+            current: Token::default(),
+            previous: Token::default(),
+            panic_mode: false,
+        }
+    }
 }
 
 /// A static function.
@@ -75,6 +82,16 @@ pub(crate) struct Chunk {
     pub(crate) code: Vec<u8>,
     pub(crate) lines: Vec<usize>,
     pub(crate) constants: Vec<Value>,
+}
+
+impl Default for Chunk {
+    fn default() -> Self {
+        Self {
+            code: Vec::new(),
+            lines: Vec::new(),
+            constants: Vec::new(),
+        }
+    }
 }
 
 // todo: remove this when all operations have been fixed
@@ -138,27 +155,18 @@ impl<'a> Compiler<'a> {
     ///
     /// This method also initializes the scanner and parser, and
     /// is fine to use any time we need a new [Compiler]
-    pub fn new(vm: &mut VM) -> Compiler {
+    pub fn new(scanner: &'a mut Scanner, parser: &'a mut Parser, vm: &'a mut VM) -> Compiler<'a> {
         let entry_point = Function {
             name: "".to_string(),
             arity: 0,
-            chunk: Chunk {
-                code: Vec::new(),
-                lines: Vec::new(),
-                constants: Vec::new(),
-            },
+            chunk: Chunk::default(),
         };
         let function = vm.memory.allocate(Object::Function(Box::new(entry_point)));
         Compiler {
             vm,
             function,
-            ancestors: Vec::new(),
-            scanner: Scanner::default(),
-            parser: Parser {
-                current: Token::default(),
-                previous: Token::default(),
-                panic_mode: false,
-            },
+            scanner,
+            parser,
             scope_depth: 0,
             locals: Vec::new(),
             error_chain: LoxErrorChain::default(),
@@ -175,7 +183,7 @@ impl<'a> Compiler<'a> {
         self.advance();
 
         while !self.match_(Eof) {
-            self.declaration();
+            self.declaration()?;
         }
 
         self.end_compiler()
@@ -240,20 +248,22 @@ impl<'a> Compiler<'a> {
     ///                 | var_declaration
     ///                 | statement`
     /// ```
-    fn declaration(&mut self) {
+    fn declaration(&mut self) -> Result<(), LoxErrorChain> {
         if self.match_(Class) {
             self.class_declaration();
         } else if self.match_(Fun) {
-            self.fun_declaration();
+            self.fun_declaration()?;
         } else if self.match_(Var) {
             self.var_declaration();
         } else {
-            self.statement();
+            self.statement()?;
         }
 
         if self.parser.panic_mode {
             self.synchronize();
         }
+
+        Ok(())
     }
 
     /// Compile a variable declaration.
@@ -423,30 +433,85 @@ impl<'a> Compiler<'a> {
         todo!("compile a class definition along with methods")
     }
 
-    fn fun_declaration(&self) {
-        todo!("compile a single function definition")
+    fn fun_declaration(&mut self) -> Result<MemoryEntry, LoxErrorChain> {
+        let name = self.scanner.copy_segment(&self.parser.previous);
+        let function = self.vm.memory.allocate(Object::Function(Box::new(Function {
+            name,
+            chunk: Chunk::default(),
+            arity: 0,
+        })));
+
+        let function_constant = self.make_constant(Value::Object(self.function.clone()));
+        self.emit_bytes(op::CONSTANT, function_constant);
+
+        let name = self.parse_variable("Expected function name after fun keyword.");
+        self.define_variable(name);
+
+        let mut compiler = Compiler {
+            vm: self.vm,
+            scanner: self.scanner,
+            parser: self.parser,
+            function,
+            scope_depth: self.scope_depth + 1,
+            locals: Vec::new(),
+            error_chain: LoxErrorChain::default(),
+        };
+
+        compiler.begin_scope();
+
+        compiler.function_parameters();
+        compiler.consume(LeftBrace, "Expected '{' before function body.");
+        compiler.block()?;
+
+        compiler.end_scope();
+
+        compiler.end_compiler()
     }
 
-    fn statement(&mut self) {
+    fn function_parameters(&mut self) {
+        self.consume(LeftParen, "Expected '(' after function name.");
+
+        if self.match_(RightParen) {
+            return;
+        }
+
+        'parameters: loop {
+            self.consume(Identifier, "Expected function parameter");
+            self.add_local();
+            self.function_mut().arity += 1;
+
+            if self.match_(Comma) {
+                continue 'parameters;
+            }
+
+            break 'parameters;
+        }
+
+        self.consume(RightParen, "Expected ')' after function parameters.")
+    }
+
+    fn statement(&mut self) -> Result<(), LoxErrorChain> {
         if self.match_(Print) {
             self.print_statement();
         } else if self.match_(Assert) {
             self.assert_statement();
         } else if self.match_(For) {
-            self.for_statement();
+            self.for_statement()?;
         } else if self.match_(If) {
-            self.if_statement();
+            self.if_statement()?;
         } else if self.match_(Return) {
             self.return_statement();
         } else if self.match_(While) {
-            self.while_statement();
+            self.while_statement()?;
         } else if self.match_(LeftBrace) {
             self.begin_scope();
-            self.block();
+            self.block()?;
             self.end_scope();
         } else {
             self.epxression_statement();
         }
+
+        Ok(())
     }
 
     fn print_statement(&mut self) {
@@ -465,7 +530,7 @@ impl<'a> Compiler<'a> {
         todo!("compile a return statement")
     }
 
-    fn if_statement(&mut self) {
+    fn if_statement(&mut self) -> Result<(), LoxErrorChain> {
         self.consume(LeftParen, "Expect '(' after if keyword.");
         self.expression();
         self.consume(RightParen, "Expect ')' after if condition.");
@@ -476,12 +541,12 @@ impl<'a> Compiler<'a> {
 
         // Emit bytecode for the then branch, use statement so we don't have to
         // consume a block: this could just be a single expression statement
-        self.statement();
+        self.statement()?;
 
         if !self.match_(Else) {
             let else_jump_to = self.next_instruction();
             self.patch_jump(else_jump, else_jump_to - else_jump_from);
-            return;
+            return Ok(());
         }
 
         let then_jump = self.next_instruction();
@@ -500,7 +565,7 @@ impl<'a> Compiler<'a> {
         self.patch_jump(else_jump, else_jump_to - else_jump_from);
 
         // Emit bytecode for else branch, same reasoning as then branch
-        self.statement();
+        self.statement()?;
 
         // The first instruction executed outside the loop
         let then_jump_to = self.next_instruction();
@@ -508,9 +573,11 @@ impl<'a> Compiler<'a> {
         // Note we only need to execute the then jump if there is an else branch,
         // thus we return early above when if we don't match `Else`
         self.patch_jump(then_jump, then_jump_to - then_jump_from);
+
+        Ok(())
     }
 
-    fn while_statement(&mut self) {
+    fn while_statement(&mut self) -> Result<(), LoxErrorChain> {
         // The below is better understood as a modification to the if
         // statement, the comments are the same plus the loop.
         let loop_to = self.next_instruction();
@@ -523,7 +590,7 @@ impl<'a> Compiler<'a> {
         self.emit_jump(op::JUMP_IF_FALSE);
         let jump_from = self.next_instruction();
 
-        self.statement();
+        self.statement()?;
 
         let loop_patch = self.next_instruction();
         self.emit_jump(op::LOOP);
@@ -535,16 +602,18 @@ impl<'a> Compiler<'a> {
         // which can't overflow negative, so we reverse the arguments.
         self.patch_jump(loop_patch, loop_from - loop_to);
         self.patch_jump(jump_patch, jump_to - jump_from);
+
+        Ok(())
     }
 
-    fn for_statement(&mut self) {
+    fn for_statement(&mut self) -> Result<(), LoxErrorChain> {
         // The loop iterator in a for statement act like they're in a
         // new block all their own
         self.begin_scope();
 
         // Begin consuming the for statements, stopping at each ';'
         self.consume(LeftParen, "Expect '(' after for keyword.");
-        self.declaration();
+        self.declaration()?;
 
         // Now we basically do a while loop with the next statement as the condition
         // but with an extra fancy jump added in there.
@@ -574,7 +643,7 @@ impl<'a> Compiler<'a> {
 
         // Loop body
         let start_body_to = self.next_instruction();
-        self.statement();
+        self.statement()?;
 
         // Jump back to the iterator update
         let update_iter_patch = self.next_instruction();
@@ -593,6 +662,8 @@ impl<'a> Compiler<'a> {
         self.patch_jump(exit_loop_patch, exit_loop_to - exit_loop_from);
 
         self.end_scope();
+
+        Ok(())
     }
 
     fn jump_target(ip: usize) -> (u8, u8) {
@@ -633,12 +704,13 @@ impl<'a> Compiler<'a> {
         self.emit_byte(op::POP);
     }
 
-    fn block(&mut self) {
+    fn block(&mut self) -> Result<(), LoxErrorChain> {
         while !self.check(RightBrace) && !self.check(Eof) {
-            self.declaration()
+            self.declaration()?;
         }
 
-        self.consume(RightBrace, "Unmatched '{' results in unterminated block.")
+        self.consume(RightBrace, "Unmatched '{' results in unterminated block.");
+        Ok(())
     }
 
     fn begin_scope(&mut self) {
@@ -742,7 +814,7 @@ impl<'a> Compiler<'a> {
 
     fn copy_string(&mut self) -> MemoryEntry {
         let token = &self.parser.previous;
-        let string = Object::String(self.scanner.copy_segment(token));
+        let string = Object::String(Box::new(self.scanner.copy_segment(token)));
         self.vm.memory.allocate(string)
     }
 
@@ -987,9 +1059,12 @@ mod test {
         ($bytecode:ident, $vm:ident, $name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
+                let mut scanner = Scanner::default();
+                let mut parser = Parser::default();
                 let mut $vm = VM::default();
-                let compiler = Compiler::new(&mut $vm);
+                let compiler = Compiler::new(&mut scanner, &mut parser, &mut $vm);
 
+                println!("Compiling program:\n{}", $text);
                 let $vm = match compiler.compile($text) {
                     Ok(_) => {
                         $vm.memory
@@ -1015,8 +1090,11 @@ mod test {
             #[test]
             fn $name() {
                 let mut vm = VM::default();
-                let compiler = Compiler::new(&mut vm);
+                let mut scanner = Scanner::default();
+                let mut parser = Parser::default();
+                let compiler = Compiler::new(&mut scanner, &mut parser, &mut vm);
 
+                println!("Compiling program:\n{}", $text);
                 let mut err = compiler.compile($text).unwrap_err();
                 let mut $errors = err.errors();
 
@@ -1027,8 +1105,10 @@ mod test {
 
     #[test]
     fn constants_in_variable_declaration() {
+        let mut scanner = Scanner::default();
+        let mut parser = Parser::default();
         let mut vm = VM::default();
-        let compiler = Compiler::new(&mut vm);
+        let compiler = Compiler::new(&mut scanner, &mut parser, &mut vm);
         let fun = compiler.compile("var x;").unwrap();
         let bytecode = vm.memory.retrieve(&fun).as_function();
 
@@ -1312,6 +1392,41 @@ mod test {
             op::LOOP,
             0,
             11,
+            op::RETURN
+        ]
+    }
+
+    test_program! {
+        bytecode, vm,
+        define_function_global,
+        "
+            fun f(a, b) {
+                assert true;
+            }
+        ",
+        vec![
+            op::CONSTANT,
+            0,
+            op::DEFINE_GLOBAL,
+            1,
+            op::RETURN
+        ]
+    }
+
+    test_program! {
+        bytecode, vm,
+        define_function,
+        "
+            {
+                fun f(a, b) {
+                    assert true;
+                }
+            }
+        ",
+        vec![
+            op::CONSTANT,
+            0,
+            op::POP,
             op::RETURN
         ]
     }
