@@ -332,7 +332,18 @@ impl VM {
                     self.stack.push(Value::Boolean(opposite))
                 }
                 op::CALL => {
-                    todo!("Call function")
+                    let args = *self.read_byte();
+                    let frame = self.stack.len() - (args as usize) - 1;
+                    let closure = self.stack.get(frame).unwrap()
+                        .as_pointer();
+
+                    let frame = CallFrame {
+                        closure,
+                        ip: self.ip() + 1,
+                        slots: frame,
+                    };
+
+                    self.frames.push(frame);
                 }
                 op::RETURN => {
                     // todo: return from function, for now no-op
@@ -602,136 +613,136 @@ mod test {
     test_program! {
         greater_than_numbers,
         "
-            assert 2 > 1;
-            assert ! (1 > 1);
-            assert ! (0 > 1);
+        assert 2 > 1;
+        assert ! (1 > 1);
+        assert ! (0 > 1);
         "
     }
 
     test_program! {
         greater_than_equal_numbers,
         "
-            assert 2 >= 1;
-            assert 1 >= 1;
-            assert ! (0 > 1);
+        assert 2 >= 1;
+        assert 1 >= 1;
+        assert ! (0 > 1);
         "
     }
 
     test_program! {
         less_than_numbers,
         "
-            assert ! (2 < 1);
-            assert ! (1 < 1);
-            assert 0 < 1;
+        assert ! (2 < 1);
+        assert ! (1 < 1);
+        assert 0 < 1;
         "
     }
 
     test_program! {
         less_than_equal_numbers,
         "
-            assert ! (2 <= 1);
-            assert 1 <= 1;
-            assert 0 <= 1;
+        assert ! (2 <= 1);
+        assert 1 <= 1;
+        assert 0 <= 1;
         "
     }
 
     test_program! {
         multiply_and_divide,
         "
-            assert 2 * 2 == 4;
-            assert 10 / 5 == 2;
+        assert 2 * 2 == 4;
+        assert 10 / 5 == 2;
         "
     }
 
     test_program! {
         define_and_reference_global_variable,
         "
-            var x = 10;
-            assert x == 10;
+        var x = 10;
+        assert x == 10;
         "
     }
 
     test_program! {
         local_variables_block_scoping,
         "
-            var x = 10;
-            {
-                var x = 20;
-                assert x == 20;
-            }
-            assert x == 10;
-            {
-                var x = 30;
-                assert x == 30;
-            }
+        var x = 10;
+        {
+            var x = 20;
+            assert x == 20;
+        }
+        assert x == 10;
+        {
+            var x = 30;
+            assert x == 30;
+        }
         "
     }
 
     test_program! {
         local_variables_get_and_set,
         "
-            var x = 10;
-            {
-                var x;
-                assert x == nil;
+        var x = 10;
+        {
+            var x;
+            assert x == nil;
 
-                x = 20;
-                assert x == 20;
-            }
-            assert x == 10;
+            x = 20;
+            assert x == 20;
+        }
+        assert x == 10;
         "
     }
 
     test_program! {
         set_global_variable,
         "
-            var x = 10;
-            assert x == 10;
+        var x = 10;
+        assert x == 10;
 
-            x = 20;
-            assert x == 20;
+        x = 20;
+        assert x == 20;
         "
     }
 
     test_program! {
         chained_assignment,
         "
-            var x = 10;
-            var y = 20;
+        var x = 10;
+        var y = 20;
 
-            assert 30 == (x = y = 30);
-            assert x == 30;
-            assert y == 30;
+        assert 30 == (x = y = 30);
+        assert x == 30;
+        assert y == 30;
 
-            {
-                var x = 40;
-                var y = 50;
+        {
+            var x = 40;
+            var y = 50;
 
-                assert 60 == (x = y = 60);
-                assert x == 60;
-                assert y == 60;
-            }
+            assert 60 == (x = y = 60);
+            assert x == 60;
+            assert y == 60;
+        }
 
-            assert x == 30;
-            assert y == 30;
+        assert x == 30;
+        assert y == 30;
         "
     }
 
     test_program! {
         chained_assignment_multi,
         "
-            {
-                var x = 10;
-                var y = 20;
-                var z = 30;
+        {
+            var x = 10;
+            var y = 20;
+            var z = 30;
 
-                assert 30 == (x = y = z);
-            }
+            assert 30 == (x = y = z);
+        }
 
-            {
-                var t = 0;
-                assert t == 0;
-            }
+        {
+            var t = 0;
+            assert t == 0;
+        }
         "
     }
 
@@ -739,10 +750,10 @@ mod test {
         concatenate_strings,
         // Actually tests that we intern the string by re-constructing
         "
-            var x = \"Hello,\";
-            var y = \"world!\";
+        var x = \"Hello,\";
+        var y = \"world!\";
 
-            assert \"Hello, world!\" == x + \" \" + y;
+        assert \"Hello, world!\" == x + \" \" + y;
         "
     }
 
@@ -768,64 +779,75 @@ mod test {
     test_program! {
         if_statement,
         "
-            var x = 1;
-            if (false) assert false;
-            else x = 2;
+        var x = 1;
+        if (false) assert false;
+        else x = 2;
 
-            assert x == 2;
+        assert x == 2;
 
-            if (true) x = 3;
-            else assert false;
+        if (true) x = 3;
+        else assert false;
 
-            assert x == 3;
+        assert x == 3;
         "
     }
 
     test_program! {
         while_statement,
         "
-            var x = 1;
-            while (x < 10) x = x + 1;
+        var x = 1;
+        while (x < 10) x = x + 1;
 
-            assert x == 10;
+        assert x == 10;
         "
     }
 
     test_program! {
         for_statement,
         "
-            var y = 0;
-            var x = 10;
-            for (var x = 0; x < 10; x = x + 1) {
-                assert x < 10;
-                assert x == y;
-                y = y + 1;
-            }
-            assert y == 10;
-            assert x == 10;
+        var y = 0;
+        var x = 10;
+        for (var x = 0; x < 10; x = x + 1) {
+            assert x < 10;
+            assert x == y;
+            y = y + 1;
+        }
+        assert y == 10;
+        assert x == 10;
         "
     }
 
     test_program! {
         define_function_global,
         "
-            fun f(a, b) {
-                assert true;
-            }
+        fun f(a, b) {
+            assert true;
+        }
         "
     }
 
     test_program! {
         define_function,
         "
-            var f = 10;
-            {
-                fun f(a, b) {
-                    assert true;
-                }
+        var f = 10;
+        {
+            fun f(a, b) {
+                assert true;
             }
+        }
 
-            assert f == 10;
+        assert f == 10;
+        "
+    }
+
+    test_program! {
+        call_function,
+        "
+        function f(x, y) {
+            return x + y;
+        }
+
+        assert 3 == f(1, 2);
         "
     }
 }
