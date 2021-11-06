@@ -67,6 +67,7 @@ pub mod op {
         Add,
         And,
         Assert,
+        Call,
         Constant,
         DefineGlobal,
         Divide,
@@ -95,6 +96,7 @@ pub mod op {
     pub const ADD: u8 = Add as u8;
     pub const AND: u8 = And as u8;
     pub const ASSERT: u8 = Assert as u8;
+    pub const CALL: u8 = Call as u8;
     pub const CONSTANT: u8 = Constant as u8;
     pub const DEFINE_GLOBAL: u8 = DefineGlobal as u8;
     pub const DIVIDE: u8 = Divide as u8;
@@ -328,6 +330,9 @@ impl VM {
 
                     let opposite = matches!(val, Value::Nil | Value::Boolean(false));
                     self.stack.push(Value::Boolean(opposite))
+                }
+                op::CALL => {
+                    todo!("Call function")
                 }
                 op::RETURN => {
                     // todo: return from function, for now no-op

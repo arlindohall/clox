@@ -48,6 +48,7 @@ impl Disassembler for Function {
                 ADD => Self::print_instruction,
                 AND => Self::print_instruction,
                 ASSERT => Self::print_instruction,
+                CALL => Self::print_local,
                 CONSTANT => Self::print_constant,
                 DEFINE_GLOBAL => Self::print_constant,
                 DIVIDE => Self::print_instruction,
@@ -70,7 +71,7 @@ impl Disassembler for Function {
                 SET_GLOBAL => Self::print_constant,
                 SET_LOCAL => Self::print_local,
                 SUBTRACT => Self::print_instruction,
-                25_u8..=u8::MAX => panic!("Invalid opcode."),
+                26_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op.bytecode_name());
@@ -96,6 +97,7 @@ impl GraphAssembly for Function {
                 ADD => Self::graph_instruction,
                 AND => Self::graph_instruction,
                 ASSERT => Self::graph_instruction,
+                CALL => Self::graph_local,
                 CONSTANT => Self::graph_constant,
                 DEFINE_GLOBAL => Self::graph_constant,
                 DIVIDE => Self::graph_instruction,
@@ -118,7 +120,7 @@ impl GraphAssembly for Function {
                 SET_GLOBAL => Self::graph_constant,
                 SET_LOCAL => Self::graph_local,
                 SUBTRACT => Self::graph_instruction,
-                25_u8..=u8::MAX => panic!("Invalid opcode."),
+                26_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op);
@@ -302,6 +304,7 @@ impl DisassembleInstruction for u8 {
             ADD => String::from("OP_ADD"),
             AND => String::from("OP_AND"),
             ASSERT => String::from("OP_ASSERT"),
+            CALL => String::from("OP_CALL"),
             CONSTANT => String::from("OP_CONSTANT"),
             DEFINE_GLOBAL => String::from("OP_DEFINE_GLOBAL"),
             DIVIDE => String::from("OP_DIVIDE"),
@@ -324,7 +327,7 @@ impl DisassembleInstruction for u8 {
             SET_GLOBAL => String::from("OP_SET_GLOBAL"),
             SET_LOCAL => String::from("OP_SET_LOCAL"),
             SUBTRACT => String::from("OP_SUBTRACT"),
-            25_u8..=u8::MAX => panic!("Invalid Opcode."),
+            26_u8..=u8::MAX => panic!("Invalid Opcode."),
         }
     }
 }

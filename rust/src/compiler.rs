@@ -490,14 +490,34 @@ impl<'a> Compiler<'a> {
             self.add_local();
             self.function_mut().arity += 1;
 
-            if self.match_(Comma) {
-                continue 'parameters;
+            if !self.match_(Comma) {
+                break 'parameters;
             }
-
-            break 'parameters;
         }
 
-        self.consume(RightParen, "Expected ')' after function parameters.")
+        self.consume(RightParen, "Expected ')' after '(' in function call.")
+    }
+
+    fn function_call(&mut self) {
+        if self.match_(RightParen) {
+            self.emit_bytes(op::CALL, 0);
+        }
+
+        let mut args = 0;
+        'parameters:loop {
+            if args == u8::MAX {
+                return self.error("Too many arguments.");
+            }
+            self.expression();
+            args += 1;
+
+            if !self.match_(Comma) {
+                break 'parameters;
+            }
+        }
+
+        self.emit_bytes(op::CALL, args);
+        self.consume(RightParen, "Expect ')' after function parameters.")
     }
 
     fn statement(&mut self) -> Result<(), LoxErrorChain> {
@@ -807,7 +827,7 @@ impl<'a> Compiler<'a> {
             Identifier => parse_rule(Some(variable), None, prec::NONE),
             If => parse_rule(None, None, prec::NONE),
             LeftBrace => parse_rule(None, None, prec::NONE),
-            LeftParen => parse_rule(Some(grouping), None, prec::NONE),
+            LeftParen => parse_rule(Some(grouping), Some(call), prec::CALL),
             Less => parse_rule(None, Some(binary), prec::COMPARISON),
             LessEqual => parse_rule(None, Some(binary), prec::COMPARISON),
             Minus => parse_rule(Some(unary), Some(binary), prec::TERM),
@@ -1018,6 +1038,10 @@ fn grouping(this: &mut Compiler, _can_assign: bool) {
     this.consume(RightParen, "Expected closing ')'.");
 }
 
+fn call(this: &mut Compiler, _can_assign: bool) {
+    this.function_call();
+}
+
 fn string(this: &mut Compiler, _can_assign: bool) {
     let value = this.copy_string();
 
@@ -1070,7 +1094,7 @@ impl ConvertNumber for String {
 mod test {
 
     use super::*;
-    use crate::{debug::Disassembler, vm::LoxError::ScanError};
+    use crate::{vm::LoxError::ScanError};
 
     macro_rules! test_program {
         ($bytecode:ident, $vm:ident, $name:ident, $text:literal, $test_case:expr) => {
@@ -1084,10 +1108,6 @@ mod test {
                 println!("Compiling program:\n{}", $text);
                 let $vm = match compiler.compile($text) {
                     Ok(_) => {
-                        $vm.memory
-                            .retrieve(&crate::object::mem(0))
-                            .as_function()
-                            .disassemble_chunk();
                         $vm
                     }
                     Err(e) => {
@@ -1469,6 +1489,35 @@ mod test {
             0,
             op::DEFINE_GLOBAL,
             1,
+            op::NIL,
+            op::RETURN
+        ]
+    }
+
+    test_program! {
+        bytecode, vm,
+        call_function,
+        "
+        fun f(a, b) {
+            return a + b;
+        }
+
+        f(1, 2);
+        ",
+        vec! [
+            op::CONSTANT,
+            0,
+            op::DEFINE_GLOBAL,
+            1,
+            op::GET_GLOBAL,
+            1,
+            op::CONSTANT,
+            2,
+            op::CONSTANT,
+            3,
+            op::CALL,
+            2,
+            op::POP,
             op::NIL,
             op::RETURN
         ]
