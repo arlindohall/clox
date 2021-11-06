@@ -75,6 +75,16 @@ pub struct Function {
     pub(crate) name: String,
     pub(crate) chunk: Chunk,
     pub(crate) arity: usize,
+    type_: Type,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
+enum Type {
+    Script,
+    Closure,
+    Method,
+    Initializer,
 }
 
 #[derive(Debug)]
@@ -158,6 +168,7 @@ impl<'a> Compiler<'a> {
             name: "".to_string(),
             arity: 0,
             chunk: Chunk::default(),
+            type_: Type::Script,
         };
         let function = vm.memory.allocate(Object::Function(Box::new(entry_point)));
         Compiler {
@@ -347,7 +358,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_return(&mut self) {
-        self.emit_byte(op::RETURN)
+        self.emit_bytes(op::NIL, op::RETURN)
     }
 
     fn parse_variable(&mut self, message: &str) -> u8 {
@@ -435,8 +446,9 @@ impl<'a> Compiler<'a> {
         let name = self.scanner.copy_segment(&self.parser.previous);
         let function = self.vm.memory.allocate(Object::Function(Box::new(Function {
             name,
-            chunk: Chunk::default(),
             arity: 0,
+            chunk: Chunk::default(),
+            type_: Type::Closure,
         })));
 
         let function_constant = self.make_constant(Value::Object(self.function.clone()));
@@ -524,8 +536,17 @@ impl<'a> Compiler<'a> {
         self.emit_byte(op::ASSERT);
     }
 
-    fn return_statement(&self) {
-        todo!("compile a return statement")
+    fn return_statement(&mut self) {
+        if self.function().type_ == Type::Script {
+            return self.error("Cannot return from top level.");
+        }
+        if self.match_(Semicolon) {
+            return self.emit_return();
+        }
+
+        self.expression();
+        self.consume(Semicolon, "Expect ';' after return statement;");
+        self.emit_byte(op::RETURN);
     }
 
     fn if_statement(&mut self) -> Result<(), LoxErrorChain> {
@@ -1125,142 +1146,142 @@ mod test {
         bytecode, vm,
         compile_variable_declaration,
         "var x;",
-        vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
+        vec![op::NIL, op::DEFINE_GLOBAL, 0, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         compile_simple_integer_expression,
         "1;",
-        vec![op::CONSTANT, 0, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         compile_print_expression,
         "print 1;",
-        vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
+        vec![op::CONSTANT, 0, op::PRINT, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         compile_print_string,
         "print \"hello\";",
-        vec![op::CONSTANT, 0, op::PRINT, op::RETURN]
+        vec![op::CONSTANT, 0, op::PRINT, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         add_two_numbers,
         "1+1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::ADD, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::ADD, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         subtract_two_numbers,
         "1-1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::SUBTRACT, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::SUBTRACT, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         multiply_two_numbers,
         "1*1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::MULTIPLY, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::MULTIPLY, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         divide_two_numbers,
         "1/1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::DIVIDE, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::DIVIDE, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         negate_a_number,
         "-1;",
-        vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         compare_for_equality,
         "1 == 1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::EQUAL, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 0, op::EQUAL, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         greater_than_numbers,
         "2 > 1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         greater_than_equal_numbers,
         "2 >= 1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         less_than_numbers,
         "2 < 1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::NOT, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::NOT, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         less_than_equal_numbers,
         "2 <= 1;",
-        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::NOT, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::NOT, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         declare_variable,
         "var x;",
-        vec![op::NIL, op::DEFINE_GLOBAL, 0, op::RETURN]
+        vec![op::NIL, op::DEFINE_GLOBAL, 0, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         define_global_variable,
         "var x = 10;",
-        vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::RETURN]
+        vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         define_and_reference_global_variable,
         "
-            var x = 10;
-            x;
+        var x = 10;
+        x;
         ",
-        vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::GET_GLOBAL, 0, op::POP, op::RETURN]
+        vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::GET_GLOBAL, 0, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         simple_block_scope,
         "{ true; }",
-        vec![op::CONSTANT, 0, op::POP, op::RETURN]
+        vec![op::CONSTANT, 0, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
         bytecode, vm,
         block_scope_locals,
         "
-            var x = 10;
-            {
-                var x = 20;
-            }
-            {
-                var x = 30;
-            }
+        var x = 10;
+        {
+            var x = 20;
+        }
+        {
+            var x = 30;
+        }
         ",
         vec![
             op::CONSTANT,
@@ -1273,6 +1294,7 @@ mod test {
             op::CONSTANT,
             3,
             op::POP,
+            op::NIL,
             op::RETURN
         ]
     }
@@ -1281,11 +1303,11 @@ mod test {
         bytecode, vm,
         block_scope_locals_get_and_set,
         "
-            {
-                var x;
-                x = 10;
-                x;
-            }
+        {
+            var x;
+            x = 10;
+            x;
+        }
         ",
         vec![
             op::NIL,
@@ -1298,7 +1320,8 @@ mod test {
             1,
             op::POP,
             op::POP,
-            op::RETURN,
+            op::NIL,
+            op::RETURN
         ]
     }
 
@@ -1306,8 +1329,8 @@ mod test {
         bytecode, vm,
         if_statement,
         "
-            if (true) print 10;
-            else print 20;
+        if (true) print 10;
+        else print 20;
         ",
         vec![
             op::CONSTANT,
@@ -1324,6 +1347,7 @@ mod test {
             op::CONSTANT,
             2,
             op::PRINT,
+            op::NIL,
             op::RETURN
         ]
     }
@@ -1332,7 +1356,7 @@ mod test {
         bytecode, vm,
         if_statement_no_else,
         "
-            if (true) print 10;
+        if (true) print 10;
         ",
         vec![
             op::CONSTANT,
@@ -1343,6 +1367,7 @@ mod test {
             op::CONSTANT,
             1,
             op::PRINT,
+            op::NIL,
             op::RETURN
         ]
     }
@@ -1351,9 +1376,9 @@ mod test {
         bytecode, vm,
         if_statement_with_block,
         "
-            if (true) {
-                var x = 10;
-            }
+        if (true) {
+            var x = 10;
+        }
         ",
         vec![
             op::CONSTANT,
@@ -1364,6 +1389,7 @@ mod test {
             op::CONSTANT,
             1,
             op::POP,
+            op::NIL,
             op::RETURN
         ]
     }
@@ -1372,9 +1398,9 @@ mod test {
         bytecode, vm,
         while_statement,
         "
-            while (false) {
-                var x = 10;
-            }
+        while (false) {
+            var x = 10;
+        }
         ",
         vec![
             op::CONSTANT,
@@ -1388,6 +1414,7 @@ mod test {
             op::LOOP,
             0,
             11,
+            op::NIL,
             op::RETURN
         ]
     }
@@ -1396,15 +1423,16 @@ mod test {
         bytecode, vm,
         define_function_global,
         "
-            fun f(a, b) {
-                assert true;
-            }
+        fun f(a, b) {
+            assert true;
+        }
         ",
         vec![
             op::CONSTANT,
             0,
             op::DEFINE_GLOBAL,
             1,
+            op::NIL,
             op::RETURN
         ]
     }
@@ -1413,16 +1441,35 @@ mod test {
         bytecode, vm,
         define_function,
         "
-            {
-                fun f(a, b) {
-                    assert true;
-                }
+        {
+            fun f(a, b) {
+                assert true;
             }
+        }
         ",
         vec![
             op::CONSTANT,
             0,
             op::POP,
+            op::NIL,
+            op::RETURN
+        ]
+    }
+
+    test_program! {
+        bytecode, vm,
+        function_with_return,
+        "
+        fun f(a, b) {
+            return a + b;
+        }
+        ",
+        vec! [
+            op::CONSTANT,
+            0,
+            op::DEFINE_GLOBAL,
+            1,
+            op::NIL,
             op::RETURN
         ]
     }
