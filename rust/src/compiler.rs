@@ -94,8 +94,6 @@ impl Default for Chunk {
     }
 }
 
-// todo: remove this when all operations have been fixed
-#[allow(dead_code)]
 pub mod prec {
     #[repr(usize)]
     enum Prec {
@@ -783,14 +781,14 @@ impl<'a> Compiler<'a> {
             False => parse_rule(Some(literal), None, prec::PRIMARY),
             For => parse_rule(None, None, prec::NONE),
             Fun => parse_rule(None, None, prec::NONE),
-            Greater => parse_rule(None, Some(binary), prec::EQUALITY),
-            GreaterEqual => parse_rule(None, Some(binary), prec::EQUALITY),
+            Greater => parse_rule(None, Some(binary), prec::COMPARISON),
+            GreaterEqual => parse_rule(None, Some(binary), prec::COMPARISON),
             Identifier => parse_rule(Some(variable), None, prec::NONE),
             If => parse_rule(None, None, prec::NONE),
             LeftBrace => parse_rule(None, None, prec::NONE),
             LeftParen => parse_rule(Some(grouping), None, prec::NONE),
-            Less => parse_rule(None, Some(binary), prec::EQUALITY),
-            LessEqual => parse_rule(None, Some(binary), prec::EQUALITY),
+            Less => parse_rule(None, Some(binary), prec::COMPARISON),
+            LessEqual => parse_rule(None, Some(binary), prec::COMPARISON),
             Minus => parse_rule(Some(unary), Some(binary), prec::TERM),
             TokenNil => parse_rule(Some(literal), None, prec::NONE),
             TokenNumber => parse_rule(Some(number), None, prec::ASSIGNMENT),
@@ -984,10 +982,8 @@ fn binary(this: &mut Compiler, _can_assign: bool) {
 
 fn unary(this: &mut Compiler, _can_assign: bool) {
     let token = this.parser.previous.type_.clone();
-    let rule = this.get_rule(&token);
-    let prec = rule.precedence + 1;
 
-    this.expression_with_precedence(prec);
+    this.expression_with_precedence(prec::UNARY);
 
     match token {
         Bang => this.emit_byte(op::NOT),
