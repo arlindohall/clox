@@ -443,7 +443,10 @@ impl<'a> Compiler<'a> {
     }
 
     fn fun_declaration(&mut self) -> Result<MemoryEntry, LoxErrorChain> {
-        let name = self.scanner.copy_segment(&self.parser.previous);
+        let name_const = self.parse_variable("Expect function name after fun keywoard");
+        let name_tok = self.parser.previous.clone();
+        let name = self.copy_string();
+        let name = self.vm.memory.retrieve(&name).as_string().clone();
         let function = self.vm.memory.allocate(Object::Function(Box::new(Function {
             name,
             arity: 0,
@@ -451,11 +454,10 @@ impl<'a> Compiler<'a> {
             type_: Type::Closure,
         })));
 
-        let function_constant = self.make_constant(Value::Object(self.function.clone()));
+        let function_constant = self.make_constant(Value::Object(function.clone()));
         self.emit_bytes(op::CONSTANT, function_constant);
 
-        let name = self.parse_variable("Expected function name after fun keyword.");
-        self.define_variable(name);
+        self.define_variable(name_const);
 
         let mut compiler = Compiler {
             vm: self.vm,
@@ -467,6 +469,11 @@ impl<'a> Compiler<'a> {
             error_chain: LoxErrorChain::default(),
         };
 
+        compiler.locals.push(Local {
+            name: name_tok,
+            depth: 0,
+            is_captured: false,
+        });
         compiler.begin_scope();
 
         compiler.function_parameters();
@@ -504,7 +511,7 @@ impl<'a> Compiler<'a> {
         }
 
         let mut args = 0;
-        'parameters:loop {
+        'parameters: loop {
             if args == u8::MAX {
                 return self.error("Too many arguments.");
             }
@@ -1094,7 +1101,7 @@ impl ConvertNumber for String {
 mod test {
 
     use super::*;
-    use crate::{vm::LoxError::ScanError};
+    use crate::vm::LoxError::ScanError;
 
     macro_rules! test_program {
         ($bytecode:ident, $vm:ident, $name:ident, $text:literal, $test_case:expr) => {
@@ -1107,9 +1114,7 @@ mod test {
 
                 println!("Compiling program:\n{}", $text);
                 let $vm = match compiler.compile($text) {
-                    Ok(_) => {
-                        $vm
-                    }
+                    Ok(_) => $vm,
                     Err(e) => {
                         println!("Error in test: {}", e);
                         panic!("Failing test: expected code to compile.")

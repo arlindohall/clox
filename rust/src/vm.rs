@@ -211,23 +211,6 @@ impl VM {
                         _ => (),
                     }
                 }
-                op::ADD => {
-                    // Reverse order of arguments a and b to match lexical order
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
-
-                    if self.is_string(&a) && self.is_string(&b) {
-                        let a = a.as_pointer();
-                        let b = b.as_pointer();
-
-                        let string = self.concatenate(a, b);
-                        self.stack.push(string)
-                    } else if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
-                        self.stack.push(Value::Number(a + b))
-                    } else {
-                        self.runtime_error("Operands must be two numbers or two strings.")
-                    }
-                }
                 op::CONSTANT => {
                     let constant = self.read_constant().clone();
                     self.stack.push(constant);
@@ -334,20 +317,46 @@ impl VM {
                 op::CALL => {
                     let args = *self.read_byte();
                     let frame = self.stack.len() - (args as usize) - 1;
-                    let closure = self.stack.get(frame).unwrap()
-                        .as_pointer();
+                    let closure = self.stack.get(frame).unwrap().as_pointer();
 
                     let frame = CallFrame {
                         closure,
-                        ip: self.ip() + 1,
+                        ip: 0,
                         slots: frame,
                     };
 
                     self.frames.push(frame);
                 }
                 op::RETURN => {
-                    // todo: return from function, for now no-op
-                    return;
+                    let value = self.stack.pop().unwrap();
+                    let frame = self.frames.pop().unwrap();
+
+                    if self.frames.is_empty() {
+                        return;
+                    }
+
+                    for _ in 0..=self.memory.retrieve(&frame.closure).as_function().arity {
+                        self.stack.pop();
+                    }
+
+                    self.stack.push(value);
+                }
+                op::ADD => {
+                    // Reverse order of arguments a and b to match lexical order
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+
+                    if self.is_string(&a) && self.is_string(&b) {
+                        let a = a.as_pointer();
+                        let b = b.as_pointer();
+
+                        let string = self.concatenate(a, b);
+                        self.stack.push(string)
+                    } else if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
+                        self.stack.push(Value::Number(a + b))
+                    } else {
+                        self.runtime_error("Operands must be two numbers or two strings.")
+                    }
                 }
                 op::SUBTRACT => {
                     // Popped in reverse order they were pushed, expecting a-b
@@ -848,6 +857,19 @@ mod test {
         }
 
         assert 3 == f(1, 2);
+        "
+    }
+
+    test_program_failure! {
+        assert_failure_to_prove_function_called,
+        "
+        function f() {
+            return;
+        }
+
+        f();
+
+        assert false;
         "
     }
 }

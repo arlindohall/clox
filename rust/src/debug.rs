@@ -4,7 +4,7 @@ use crate::vm::{op::*, VM};
 
 pub static mut DEBUG_GRAPH_CODE: bool = false;
 pub static mut DEBUG_PRINT_CODE: bool = true;
-pub static mut DEBUG_TRACE_EXECUTION: bool = false;
+pub static mut DEBUG_TRACE_EXECUTION: bool = true;
 
 pub trait Disassembler {
     fn disassemble_chunk(&self);
