@@ -1110,25 +1110,25 @@ mod test {
     use crate::vm::LoxError::ScanError;
 
     macro_rules! test_program {
-        ($bytecode:ident, $vm:ident, $name:ident, $text:literal, $test_case:expr) => {
+        ($name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
                 let mut scanner = Scanner::default();
                 let mut parser = Parser::default();
-                let mut $vm = VM::default();
-                let compiler = Compiler::new(&mut scanner, &mut parser, &mut $vm);
+                let mut vm = VM::default();
+                let compiler = Compiler::new(&mut scanner, &mut parser, &mut vm);
 
                 println!("Compiling program:\n{}", $text);
-                let mut $vm = match compiler.compile($text) {
-                    Ok(_) => $vm,
+                let mut vm = match compiler.compile($text) {
+                    Ok(_) => vm,
                     Err(e) => {
                         println!("Error in test: {}", e);
                         panic!("Failing test: expected code to compile.")
                     }
                 };
-                let $bytecode = $vm.get_function(crate::object::mem(0));
+                let bytecode = vm.get_function(crate::object::mem(0));
 
-                assert_eq!($bytecode.chunk.code, $test_case)
+                assert_eq!(bytecode.chunk.code, $test_case)
             }
         };
     }
@@ -1177,119 +1177,102 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         compile_variable_declaration,
         "var x;",
         vec![op::NIL, op::DEFINE_GLOBAL, 0, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         compile_simple_integer_expression,
         "1;",
         vec![op::CONSTANT, 0, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         compile_print_expression,
         "print 1;",
         vec![op::CONSTANT, 0, op::PRINT, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         compile_print_string,
         "print \"hello\";",
         vec![op::CONSTANT, 0, op::PRINT, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         add_two_numbers,
         "1+1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::ADD, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         subtract_two_numbers,
         "1-1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::SUBTRACT, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         multiply_two_numbers,
         "1*1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::MULTIPLY, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         divide_two_numbers,
         "1/1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::DIVIDE, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         negate_a_number,
         "-1;",
         vec![op::CONSTANT, 0, op::NEGATE, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         compare_for_equality,
         "1 == 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 0, op::EQUAL, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         greater_than_numbers,
         "2 > 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         greater_than_equal_numbers,
         "2 >= 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         less_than_numbers,
         "2 < 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER_EQUAL, op::NOT, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         less_than_equal_numbers,
         "2 <= 1;",
         vec![op::CONSTANT, 0, op::CONSTANT, 1, op::GREATER, op::NOT, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         declare_variable,
         "var x;",
         vec![op::NIL, op::DEFINE_GLOBAL, 0, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         define_global_variable,
         "var x = 10;",
         vec![op::CONSTANT, 1, op::DEFINE_GLOBAL, 0, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         define_and_reference_global_variable,
         "
         var x = 10;
@@ -1299,14 +1282,12 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         simple_block_scope,
         "{ true; }",
         vec![op::CONSTANT, 0, op::POP, op::NIL, op::RETURN]
     }
 
     test_program! {
-        bytecode, vm,
         block_scope_locals,
         "
         var x = 10;
@@ -1334,7 +1315,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         block_scope_locals_get_and_set,
         "
         {
@@ -1360,7 +1340,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         if_statement,
         "
         if (true) print 10;
@@ -1387,7 +1366,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         if_statement_no_else,
         "
         if (true) print 10;
@@ -1407,7 +1385,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         if_statement_with_block,
         "
         if (true) {
@@ -1429,7 +1406,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         while_statement,
         "
         while (false) {
@@ -1454,7 +1430,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         define_function_global,
         "
         fun f(a, b) {
@@ -1472,7 +1447,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         define_function,
         "
         {
@@ -1491,7 +1465,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         function_with_return,
         "
         fun f(a, b) {
@@ -1509,7 +1482,6 @@ mod test {
     }
 
     test_program! {
-        bytecode, vm,
         call_function,
         "
         fun f(a, b) {
