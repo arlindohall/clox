@@ -131,6 +131,37 @@ impl GraphAssembly for Function {
 }
 
 impl DebugTrace for VM {
+    fn debug_trace_instruction(&mut self) {
+        unsafe {
+            if !DEBUG_TRACE_EXECUTION {
+                return;
+            }
+        }
+
+        let ip = self.ip();
+        let line_part = self.get_line_part(ip);
+
+        let op = *self.current_closure().chunk.code.get(ip).unwrap();
+        let op = op.bytecode_name();
+
+        // todo: this is expensive and happens on every instruction, is there a way to avoid?
+        let stack = self.stack.clone();
+
+        let show_val = |v: &Value| -> String {
+            match v {
+                Value::Object(ptr) => format!("{}", self.get_object(*ptr)),
+                _ => format!("{}", v),
+            }
+        };
+
+        let stack = stack
+            .iter()
+            .map(show_val)
+            .collect::<Vec<String>>()
+            .join(", ");
+        eprintln!("{:04} {}{:16} {}", ip, line_part, op, stack);
+    }
+
     fn debug_trace_function(&mut self) {
         unsafe {
             if !DEBUG_TRACE_EXECUTION {
@@ -146,35 +177,6 @@ impl DebugTrace for VM {
                 "<script>"
             }
         );
-    }
-
-    fn debug_trace_instruction(&mut self) {
-        unsafe {
-            if !DEBUG_TRACE_EXECUTION {
-                return;
-            }
-        }
-
-        let ip = self.ip();
-        let line_part = self.get_line_part(ip);
-
-        let op = *self.current_closure().chunk.code.get(ip).unwrap();
-        let op = op.bytecode_name();
-
-        let show_val = |v: &Value| -> String {
-            match v {
-                Value::Object(ptr) => format!("{}", crate::get_memory!(self, ptr, _)),
-                _ => format!("{}", v),
-            }
-        };
-
-        let stack = self
-            .stack
-            .iter()
-            .map(show_val)
-            .collect::<Vec<String>>()
-            .join(", ");
-        eprintln!("{:04} {}{:16} {}", ip, line_part, op, stack);
     }
 }
 

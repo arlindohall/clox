@@ -183,8 +183,8 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn spawn(&mut self, name: &MemoryEntry) -> Compiler {
-        let name = self.vm.memory.retrieve(name).as_string().clone();
+    pub fn spawn(&mut self, name: MemoryEntry) -> Compiler {
+        let name = self.vm.get_string(name).clone();
         let entry_point = Function {
             name,
             arity: 0,
@@ -479,7 +479,7 @@ impl<'a> Compiler<'a> {
 
     fn function_body(&mut self) -> Result<MemoryEntry, LoxErrorChain> {
         let name = self.copy_string();
-        let mut compiler = self.spawn(&name);
+        let mut compiler = self.spawn(name);
 
         compiler.function_parameters();
         compiler.consume(LeftBrace, "Expected '{' before function body.");
@@ -487,7 +487,7 @@ impl<'a> Compiler<'a> {
 
         let function = compiler.end_compiler()?;
 
-        let function_constant = self.make_constant(Value::Object(function.clone()));
+        let function_constant = self.make_constant(Value::Object(function));
         self.emit_bytes(op::CONSTANT, function_constant);
 
         Ok(function)
@@ -885,7 +885,7 @@ impl<'a> Compiler<'a> {
         // If it's not a string then that's fine, just continue as normal
         if self.function().chunk.constants.len() >= 256 {
             let token = self.copy_string();
-            let token = self.vm.memory.retrieve(&token).as_string().clone();
+            let token = self.vm.get_string(token).clone();
             self.error(&format!("Too many constants ({}).", token));
             0
         } else {
@@ -938,14 +938,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn function_mut(&mut self) -> &mut Function {
-        self.vm
-            .memory
-            .retrieve_mut(&self.function)
-            .as_mut_function()
+        self.vm.get_function_mut(self.function)
     }
 
-    fn function(&self) -> &Function {
-        self.vm.memory.retrieve(&self.function).as_function()
+    fn function(&mut self) -> &Function {
+        self.vm.get_function(self.function)
     }
 
     /// The location of the next instruction.
@@ -959,7 +956,7 @@ impl<'a> Compiler<'a> {
     /// whatever logic runs if the jump condition fails or whatever was
     /// emitted righ after the "body" of the previous jump (in the case
     /// of the unconditional jump of an if statement)
-    fn next_instruction(&self) -> usize {
+    fn next_instruction(&mut self) -> usize {
         self.function().chunk.code.len()
     }
 
@@ -1122,14 +1119,14 @@ mod test {
                 let compiler = Compiler::new(&mut scanner, &mut parser, &mut $vm);
 
                 println!("Compiling program:\n{}", $text);
-                let $vm = match compiler.compile($text) {
+                let mut $vm = match compiler.compile($text) {
                     Ok(_) => $vm,
                     Err(e) => {
                         println!("Error in test: {}", e);
                         panic!("Failing test: expected code to compile.")
                     }
                 };
-                let $bytecode = $vm.memory.retrieve(&crate::object::mem(0)).as_function();
+                let $bytecode = $vm.get_function(crate::object::mem(0));
 
                 assert_eq!($bytecode.chunk.code, $test_case)
             }
@@ -1161,18 +1158,21 @@ mod test {
         let mut vm = VM::default();
         let compiler = Compiler::new(&mut scanner, &mut parser, &mut vm);
         let fun = compiler.compile("var x;").unwrap();
-        let bytecode = vm.memory.retrieve(&fun).as_function();
 
-        assert_eq!(1, bytecode.chunk.constants.len());
-
-        if let Value::Object(ptr) = bytecode.chunk.constants.get(0).unwrap() {
-            if let Object::String(s) = vm.memory.retrieve(ptr) {
-                assert_eq!(**s, "x");
+        let ptr = {
+            let bytecode = vm.get_function(fun);
+            assert_eq!(1, bytecode.chunk.constants.len());
+            if let Value::Object(ptr) = bytecode.chunk.constants.get(0).unwrap() {
+                *ptr
             } else {
-                panic!("expected memory to contian string variable name")
+                panic!("expected the constant table to point to memory")
             }
+        };
+
+        if let Object::String(s) = vm.get_object(ptr) {
+            assert_eq!(**s, "x");
         } else {
-            panic!("expected the constant table to point to memory")
+            panic!("expected memory to contian string variable name")
         }
     }
 

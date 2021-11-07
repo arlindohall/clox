@@ -7,6 +7,8 @@ pub struct MemoryEntry {
     location: usize,
 }
 
+impl Copy for MemoryEntry {}
+
 pub fn mem(location: usize) -> MemoryEntry {
     MemoryEntry { location }
 }
@@ -51,6 +53,10 @@ impl Memory {
         }
     }
 
+    pub fn is_valid(&self, ptr: MemoryEntry) -> bool {
+        self.memory.len() > ptr.location
+    }
+
     pub fn retrieve_mut(&mut self, index: &MemoryEntry) -> Option<&mut Object> {
         self.memory.get_mut(index)
     }
@@ -61,10 +67,10 @@ impl Memory {
 
     pub fn intern(&mut self, string: Box<String>) -> MemoryEntry {
         match self.strings.get(&*string) {
-            Some(m_loc) => m_loc.clone(),
+            Some(m_loc) => *m_loc,
             None => {
                 let m_loc = self.insert(Object::String(string.clone()));
-                self.strings.insert(*string, m_loc.clone());
+                self.strings.insert(*string, m_loc);
 
                 m_loc
             }
@@ -73,7 +79,7 @@ impl Memory {
 
     fn insert(&mut self, object: Object) -> MemoryEntry {
         let m_loc = mem(self.count);
-        self.memory.insert(m_loc.clone(), object);
+        self.memory.insert(m_loc, object);
         self.count += 1;
 
         m_loc
@@ -102,7 +108,7 @@ impl Display for Object {
 }
 
 impl Object {
-    pub fn as_mut_function(&mut self) -> &mut Function {
+    pub fn as_function_mut(&mut self) -> &mut Function {
         match self {
             Object::Function(f) => f,
             _ => panic!("Internal error: expected lox function type (this is a compiler bug)."),

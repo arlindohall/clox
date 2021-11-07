@@ -11,12 +11,12 @@ use crate::value::Value;
 
 const MAX_FRAMES: usize = 265;
 
-const STACK_ERROR: &str = "(Internal) tried to access invalid stack position.";
-const CONSTANT_ERROR: &str = "(Internal) tried to access invalid constant.";
-const GLOBAL_ERROR: &str = "Fatal: tried to access non-existent global variable.";
-const MEMORY_ERROR: &str = "(Internal) invalid memory access.";
-const STACK_UNDERFLOW: &str = "(Internal) tried to acces invalid stack frame.";
-const STACK_OVERFLOW: &str = "Stack overflow.";
+pub const STACK_ERROR: &str = "(Internal) tried to access invalid stack position.";
+pub const CONSTANT_ERROR: &str = "(Internal) tried to access invalid constant.";
+pub const GLOBAL_ERROR: &str = "Fatal: tried to access non-existent global variable.";
+pub const MEMORY_ERROR: &str = "(Internal) invalid memory access.";
+pub const STACK_UNDERFLOW: &str = "(Internal) tried to acces invalid stack frame.";
+pub const STACK_OVERFLOW: &str = "Stack overflow.";
 
 /// Lox Virtual Machine.
 ///
@@ -160,33 +160,24 @@ macro_rules! get_frame_mut {
     }
 }
 
-macro_rules! get_memory {
-    ($vm:ident, $loc:expr, $type:pat) => {
+macro_rules! get_object {
+    ($vm:ident, $ptr:expr, $type:pat) => {
         {
-            let entry = $vm.memory.retrieve($loc);
-            match entry {
-                Some($type) => entry.unwrap(),
-                _ => {
-                    $vm.runtime_error(MEMORY_ERROR);
-                    $vm.print_errors();
-                    panic!("{}", $vm.error_chain)
-                }
+            let obj = $vm.get_object($ptr);
+            match obj {
+                $type => obj,
+                _ => panic!("{}", MEMORY_ERROR)
             }
         }
     }
 }
-
-macro_rules! get_memory_mut {
-    ($vm:ident, $loc:expr, $type:pat) => {
+macro_rules! get_object_mut {
+    ($vm:ident, $ptr:expr, $type:pat) => {
         {
-            let entry = $vm.memory.retrieve_mut($loc);
-            match entry {
-                Some($type) => entry.unwrap(),
-                _ => {
-                    $vm.runtime_error(MEMORY_ERROR);
-                    $vm.print_errors();
-                    panic!("{}", $vm.error_chain)
-                }
+            let obj = $vm.get_object_mut($ptr);
+            match obj {
+                $type => obj,
+                _ => panic!("{}", MEMORY_ERROR)
             }
         }
     }
@@ -289,7 +280,7 @@ impl VM {
             }
         };
 
-        self.call(&function, 0, 0);
+        self.call(function, 0, 0);
         match self.run() {
             Ok(value) => Ok((self, value)),
             Err(_) => Err(self),
@@ -297,8 +288,8 @@ impl VM {
 
     }
 
-    fn call(&mut self, mem_entry: &MemoryEntry, argc: usize, slots: usize) {
-        let closure = get_memory_mut!(self, mem_entry, Object::Function(_)).as_function();
+    fn call(&mut self, mem_entry: MemoryEntry, argc: usize, slots: usize) {
+        let closure = self.get_object_mut(mem_entry).as_function();
         if closure.arity != argc {
             let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
             self.runtime_error(message);
@@ -309,7 +300,7 @@ impl VM {
         }
 
         self.frames.push(CallFrame {
-            closure: mem_entry.clone(),
+            closure: mem_entry,
             ip: 0,
             slots,
         });
@@ -404,7 +395,7 @@ impl VM {
                         Value::Nil => println!("nil"),
                         Value::Number(n) => println!("{}", n),
                         Value::Boolean(b) => println!("{}", b),
-                        Value::Object(ptr) => println!("{}", get_memory!(self, &ptr, _)),
+                        Value::Object(ptr) => println!("{}", self.get_object(ptr)),
                     }
                 }
                 op::NIL => self.stack.push(Value::Nil),
@@ -426,7 +417,7 @@ impl VM {
                     let argc = self.read_byte();
                     let frame = self.stack.len() - (argc as usize) - 1;
                     let closure = get_stack!(self, frame).as_pointer();
-                    self.call(&closure, argc as usize, frame + 1);
+                    self.call(closure, argc as usize, frame + 1);
                 }
                 op::RETURN => {
                     let value = pop_stack!(self);
@@ -436,7 +427,7 @@ impl VM {
                         return Ok(value);
                     }
 
-                    for _ in 0..=get_memory!(self, &frame.closure, Object::Function(_)).as_function().arity {
+                    for _ in 0..=self.get_object(frame.closure).as_function().arity {
                         self.stack.pop();
                     }
 
@@ -535,23 +526,13 @@ impl VM {
         }
     }
 
-    pub(crate) fn current_closure(&mut self) -> &Function {
-        let frame = get_frame!(self);
-        get_memory!(self, &frame.closure, Object::Function(_)).as_function()
+    pub fn current_closure(&mut self) -> &Function {
+        let frame = get_frame!(self).closure;
+        self.get_object(frame).as_function()
     }
 
-    pub(crate) fn ip(&mut self) -> usize {
+    pub fn ip(&mut self) -> usize {
         get_frame!(self).ip
-    }
-
-    pub fn concatenate(&mut self, v1: MemoryEntry, v2: MemoryEntry) -> Value {
-        let v1 = get_memory!(self, &v1, Object::String(_)).as_string();
-        let v2 = get_memory!(self, &v2, Object::String(_)).as_string();
-
-        let mut result = v1.clone();
-        result.push_str(v2);
-
-        Value::Object(self.memory.allocate(Object::String(Box::new(result))))
     }
 
     pub fn line_number(&mut self) -> usize {
@@ -612,25 +593,63 @@ impl VM {
         (high << 8) | low
     }
 
-    pub fn is_string(&self, value: &Value) -> bool {
+    fn memory_error(&mut self) -> ! {
+        self.runtime_error(MEMORY_ERROR);
+        self.print_errors();
+        panic!("{}", self.error_chain)
+    }
+
+    pub fn get_object(&mut self, ptr: MemoryEntry) -> &Object {
+        if self.memory.is_valid(ptr) {
+            return self.memory.retrieve(&ptr).unwrap();
+        }
+        self.memory_error()
+    }
+
+    pub fn get_object_mut(&mut self, ptr: MemoryEntry) -> &mut Object {
+        if self.memory.is_valid(ptr) {
+            return self.memory.retrieve_mut(&ptr).unwrap();
+        }
+        self.memory_error()
+    }
+
+    pub fn get_string(&mut self, ptr: MemoryEntry) -> &String {
+        get_object!(self, ptr, Object::String(_)).as_string()
+    }
+
+    pub fn get_function_mut(&mut self, ptr: MemoryEntry) -> &mut Function {
+        get_object_mut!(self, ptr, Object::Function(_)).as_function_mut()
+    }
+
+    pub fn get_function(&mut self, ptr: MemoryEntry) -> &Function {
+        get_object!(self, ptr, Object::Function(_)).as_function()
+    }
+
+    pub fn is_string(&mut self, value: &Value) -> bool {
         match value {
             Value::Object(ptr) => {
-                let obj = get_memory!(self, ptr, _);
-                matches!(obj, Object::String(_))
+                matches!(self.get_object(*ptr), Object::String(_))
             }
             _ => false,
         }
     }
 
+    pub fn concatenate(&mut self, v1: MemoryEntry, v2: MemoryEntry) -> Value {
+        let mut result = self.get_object(v1).as_string().clone();
+        result.push_str(self.get_object(v2).as_string());
+
+        Value::Object(self.memory.allocate(Object::String(Box::new(result))))
+    }
+
     fn get_local(&mut self) -> usize {
         let base = get_frame!(self).slots;
         let offset = self.read_byte() as usize;
-        return base + offset - 1;
+        base + offset - 1
     }
 
     fn read_name(&mut self) -> String {
         let name = self.read_constant().as_pointer();
-        return get_memory!(self, &name, Object::String(_)).as_string().clone();
+        return self.get_object(name).as_string().clone();
     }
 }
 

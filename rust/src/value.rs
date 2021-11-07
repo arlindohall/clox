@@ -20,7 +20,7 @@ pub enum Value {
 impl Value {
     pub fn as_pointer(&self) -> MemoryEntry {
         if let Value::Object(ptr) = self {
-            ptr.clone()
+            *ptr
         } else {
             panic!("Internal lox error (expected object), this is a bug.")
         }
@@ -45,7 +45,7 @@ impl Value {
     /// Object and VM impls.
     pub fn loose_equals(&self, value: &Value) -> Result<bool, (MemoryEntry, MemoryEntry)> {
         match (self, value) {
-            (Value::Object(o1), Value::Object(o2)) => Err((o1.clone(), o2.clone())),
+            (Value::Object(o1), Value::Object(o2)) => Err((*o1, *o2)),
             _ => Ok(self.strict_equals(value)),
         }
     }
