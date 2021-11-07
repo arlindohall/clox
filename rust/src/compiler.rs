@@ -191,7 +191,10 @@ impl<'a> Compiler<'a> {
             chunk: Chunk::default(),
             type_: Type::Closure,
         };
-        let function = self.vm.memory.allocate(Object::Function(Box::new(entry_point)));
+        let function = self
+            .vm
+            .memory
+            .allocate(Object::Function(Box::new(entry_point)));
         Compiler {
             vm: self.vm,
             scanner: self.scanner,
@@ -346,6 +349,9 @@ impl<'a> Compiler<'a> {
     }
 
     fn mark_initialized(&mut self) {
+        if self.scope_depth == 0 {
+            return;
+        }
         self.locals.last_mut().unwrap().depth = self.scope_depth;
     }
 
@@ -463,12 +469,16 @@ impl<'a> Compiler<'a> {
         todo!("compile a class definition along with methods")
     }
 
-    fn fun_declaration(&mut self) -> Result<MemoryEntry, LoxErrorChain> {
-        let name_const = self.parse_variable("Expect function name after fun keywoard");
-        let name = self.copy_string();
+    fn fun_declaration(&mut self) -> Result<(), LoxErrorChain> {
+        let name = self.parse_variable("Expect function name after fun keywoard");
+        self.mark_initialized();
+        self.function_body()?;
+        self.define_variable(name);
+        Ok(())
+    }
 
-        self.define_variable(name_const);
-
+    fn function_body(&mut self) -> Result<MemoryEntry, LoxErrorChain> {
+        let name = self.copy_string().clone();
         let mut compiler = self.spawn(&name);
 
         compiler.function_parameters();
@@ -1451,10 +1461,10 @@ mod test {
         }
         ",
         vec![
-            op::DEFINE_GLOBAL,
-            0,
             op::CONSTANT,
             1,
+            op::DEFINE_GLOBAL,
+            0,
             op::NIL,
             op::RETURN
         ]
@@ -1488,10 +1498,10 @@ mod test {
         }
         ",
         vec! [
-            op::DEFINE_GLOBAL,
-            0,
             op::CONSTANT,
             1,
+            op::DEFINE_GLOBAL,
+            0,
             op::NIL,
             op::RETURN
         ]
@@ -1508,10 +1518,10 @@ mod test {
         f(1, 2);
         ",
         vec! [
-            op::DEFINE_GLOBAL,
-            0,
             op::CONSTANT,
             1,
+            op::DEFINE_GLOBAL,
+            0,
             op::GET_GLOBAL,
             0,
             op::CONSTANT,
