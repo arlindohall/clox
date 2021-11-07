@@ -848,6 +848,20 @@ mod test {
         "
     }
 
+    test_program! {
+        return_function_as_value,
+        "
+        fun f() {
+            fun g() {
+                return 1;
+            }
+            return g;
+        }
+
+        assert f()() == 1;
+        "
+    }
+
     test_program_failure! {
         assert_failure_to_prove_function_called,
         "
