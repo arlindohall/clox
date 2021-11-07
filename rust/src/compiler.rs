@@ -164,8 +164,9 @@ impl<'a> Compiler<'a> {
     /// This method also initializes the scanner and parser, and
     /// is fine to use any time we need a new [Compiler]
     pub fn new(scanner: &'a mut Scanner, parser: &'a mut Parser, vm: &'a mut VM) -> Compiler<'a> {
+        let name = "".to_string();
         let entry_point = Function {
-            name: "".to_string(),
+            name,
             arity: 0,
             chunk: Chunk::default(),
             type_: Type::Script,
@@ -177,6 +178,26 @@ impl<'a> Compiler<'a> {
             scanner,
             parser,
             scope_depth: 0,
+            locals: Vec::new(),
+            error_chain: LoxErrorChain::default(),
+        }
+    }
+
+    pub fn spawn(&mut self, name: &MemoryEntry) -> Compiler {
+        let name = self.vm.memory.retrieve(&name).as_string().clone();
+        let entry_point = Function {
+            name,
+            arity: 0,
+            chunk: Chunk::default(),
+            type_: Type::Closure,
+        };
+        let function = self.vm.memory.allocate(Object::Function(Box::new(entry_point)));
+        Compiler {
+            vm: self.vm,
+            scanner: self.scanner,
+            parser: self.parser,
+            function,
+            scope_depth: self.scope_depth + 1,
             locals: Vec::new(),
             error_chain: LoxErrorChain::default(),
         }
@@ -444,45 +465,22 @@ impl<'a> Compiler<'a> {
 
     fn fun_declaration(&mut self) -> Result<MemoryEntry, LoxErrorChain> {
         let name_const = self.parse_variable("Expect function name after fun keywoard");
-        let name_tok = self.parser.previous.clone();
         let name = self.copy_string();
-        let name = self.vm.memory.retrieve(&name).as_string().clone();
-        let function = self.vm.memory.allocate(Object::Function(Box::new(Function {
-            name,
-            arity: 0,
-            chunk: Chunk::default(),
-            type_: Type::Closure,
-        })));
-
-        let function_constant = self.make_constant(Value::Object(function.clone()));
-        self.emit_bytes(op::CONSTANT, function_constant);
 
         self.define_variable(name_const);
 
-        let mut compiler = Compiler {
-            vm: self.vm,
-            scanner: self.scanner,
-            parser: self.parser,
-            function,
-            scope_depth: self.scope_depth + 1,
-            locals: Vec::new(),
-            error_chain: LoxErrorChain::default(),
-        };
-
-        compiler.locals.push(Local {
-            name: name_tok,
-            depth: 0,
-            is_captured: false,
-        });
-        compiler.begin_scope();
+        let mut compiler = self.spawn(&name);
 
         compiler.function_parameters();
         compiler.consume(LeftBrace, "Expected '{' before function body.");
         compiler.block()?;
 
-        compiler.end_scope();
+        let function = compiler.end_compiler()?;
 
-        compiler.end_compiler()
+        let function_constant = self.make_constant(Value::Object(function.clone()));
+        self.emit_bytes(op::CONSTANT, function_constant);
+
+        Ok(function)
     }
 
     fn function_parameters(&mut self) {
@@ -1453,9 +1451,9 @@ mod test {
         }
         ",
         vec![
-            op::CONSTANT,
-            0,
             op::DEFINE_GLOBAL,
+            0,
+            op::CONSTANT,
             1,
             op::NIL,
             op::RETURN
@@ -1490,9 +1488,9 @@ mod test {
         }
         ",
         vec! [
-            op::CONSTANT,
-            0,
             op::DEFINE_GLOBAL,
+            0,
+            op::CONSTANT,
             1,
             op::NIL,
             op::RETURN
@@ -1510,12 +1508,12 @@ mod test {
         f(1, 2);
         ",
         vec! [
-            op::CONSTANT,
-            0,
             op::DEFINE_GLOBAL,
+            0,
+            op::CONSTANT,
             1,
             op::GET_GLOBAL,
-            1,
+            0,
             op::CONSTANT,
             2,
             op::CONSTANT,

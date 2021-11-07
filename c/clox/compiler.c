@@ -686,7 +686,7 @@ static void function(FunctionType type) {
             defineVariable(constant);
         } while (match(TOKEN_COMMA));
     }
-    consume(TOKEN_RIGHT_PAREN, "Expect '(' after parameters.");
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
     consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.");
     block();
 
