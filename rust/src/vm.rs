@@ -597,11 +597,6 @@ mod test {
 
     test_program! { assert_true, "assert true;" }
 
-    test_program_failure! {
-        assert_false,
-        "assert false;"
-    }
-
     test_program! {
         compare_two_numbers,
         "assert 1 == 1;"
@@ -864,5 +859,19 @@ mod test {
 
         assert false;
         "
+    }
+
+    test_program_failure! {
+        reference_unset_global_variable,
+        "
+        {
+            var y = x + 1;
+        }
+        "
+    }
+
+    test_program_failure! {
+        assert_false,
+        "assert false;"
     }
 }
