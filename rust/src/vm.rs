@@ -11,6 +11,13 @@ use crate::value::Value;
 
 const MAX_FRAMES: usize = 265;
 
+const STACK_ERROR: &str = "(Internal) tried to access invalid stack position.";
+const CONSTANT_ERROR: &str = "(Internal) tried to access invalid constant.";
+const GLOBAL_ERROR: &str = "Fatal: tried to access non-existent global variable.";
+const MEMORY_ERROR: &str = "(Internal) invalid memory access.";
+const STACK_UNDERFLOW: &str = "(Internal) tried to acces invalid stack frame.";
+const STACK_OVERFLOW: &str = "Stack overflow.";
+
 /// Lox Virtual Machine.
 ///
 /// This struct contains the VM runtime properties that
@@ -59,6 +66,130 @@ pub enum LoxError {
 #[derive(Debug)]
 pub struct LoxErrorChain {
     errors: Vec<LoxError>,
+}
+
+macro_rules! pop_stack {
+    ($vm:ident) => {
+        match $vm.stack.pop() {
+            Some(val) => val,
+            None => {
+                $vm.runtime_error(STACK_ERROR);
+                $vm.print_errors();
+                panic!("{}", $vm.error_chain);
+            }
+        }
+    }
+}
+
+macro_rules! get_stack {
+    ($vm:ident, $index:expr) => {
+        match $vm.stack.get($index) {
+            Some(val) => val,
+            None => {
+                $vm.runtime_error(STACK_ERROR);
+                $vm.print_errors();
+                panic!("{}", $vm.error_chain);
+            }
+        }
+    }
+}
+
+macro_rules! peek_stack {
+    ($vm:ident) => {
+        match $vm.stack.last() {
+            Some(val) => val,
+            None => {
+                $vm.runtime_error(STACK_ERROR);
+                $vm.print_errors();
+                panic!("{}", $vm.error_chain);
+            }
+        }
+    }
+
+}
+
+macro_rules! get_global {
+    ($vm:ident, $name:ident) => {
+        match $vm.globals.get($name) {
+            Some(mem) => mem.clone(),
+            None => {
+                $vm.runtime_error(GLOBAL_ERROR);
+                $vm.print_errors();
+                return Err(&$vm.error_chain)
+            }
+        }
+    }
+}
+
+macro_rules! pop_frame {
+    ($vm:ident) => {
+        match $vm.frames.pop() {
+            Some(frame) => frame,
+            None => {
+                $vm.runtime_error(STACK_UNDERFLOW);
+                $vm.print_errors();
+                panic!("{}", $vm.error_chain);
+            }
+        }
+    }
+}
+
+macro_rules! get_frame {
+    ($vm:ident) => {
+        match $vm.frames.last() {
+            Some(frame) => frame,
+            None => {
+                $vm.runtime_error(STACK_UNDERFLOW);
+                $vm.print_errors();
+                panic!("{}", $vm.error_chain);
+            }
+        }
+    }
+}
+
+macro_rules! get_frame_mut {
+    ($vm:ident) => {
+        match $vm.frames.last_mut() {
+            Some(frame) => frame,
+            None => {
+                $vm.runtime_error(STACK_UNDERFLOW);
+                $vm.print_errors();
+                panic!("{}", $vm.error_chain);
+            }
+        }
+    }
+}
+
+macro_rules! get_memory {
+    ($vm:ident, $loc:expr, $type:pat) => {
+        {
+            let entry = $vm.memory.retrieve($loc);
+            match entry {
+                Some($type) => entry.unwrap(),
+                _ => {
+                    $vm.runtime_error(MEMORY_ERROR);
+                    $vm.print_errors();
+                    panic!("{}", $vm.error_chain)
+                }
+            }
+        }
+    }
+}
+
+macro_rules! get_memory_mut {
+    ($vm:ident, $loc:expr, $type:pat) => {
+        {
+            let entry = $vm.memory.retrieve_mut($loc);
+            match entry {
+                Some($type) => entry.unwrap(),
+                _ => {
+                    $vm.runtime_error(MEMORY_ERROR);
+                    $vm.print_errors();
+                    panic!("{}", $vm.error_chain)
+                }
+            }
+        }
+    }
 }
 
 pub mod op {
@@ -144,7 +275,7 @@ impl VM {
     /// Compile the script or line of code into bytecode, then
     /// execute the bytecode, all in the context of the VM that
     /// is set up with [new](#method.new).
-    pub fn interpret(mut self, statement: &str) -> Result<VM, (VM, LoxErrorChain)> {
+    pub fn interpret(mut self, statement: &str) -> Result<(VM, Value), VM> {
         let mut scanner = Scanner::default();
         let mut parser = Parser::default();
         let compiler = Compiler::new(&mut scanner, &mut parser, &mut self);
@@ -153,26 +284,28 @@ impl VM {
         // compiler can swap itself out for a child compiler
         let function = match compiler.compile(statement) {
             Ok(func) => func,
-            Err(e) => {
-                return Err((self, e));
+            Err(_) => {
+                return Err(self);
             }
         };
 
         self.call(&function, 0, 0);
-        self.run();
+        match self.run() {
+            Ok(value) => Ok((self, value)),
+            Err(_) => Err(self),
+        }
 
-        Ok(self)
     }
 
     fn call(&mut self, mem_entry: &MemoryEntry, argc: usize, slots: usize) {
-        let closure = self.memory.retrieve_mut(mem_entry).as_function();
+        let closure = get_memory_mut!(self, mem_entry, Object::Function(_)).as_function();
         if closure.arity != argc {
             let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
             self.runtime_error(message);
         }
 
         if self.frames.len() >= MAX_FRAMES {
-            self.runtime_error("Stack overflow.");
+            self.runtime_error(STACK_OVERFLOW);
         }
 
         self.frames.push(CallFrame {
@@ -184,28 +317,33 @@ impl VM {
 
     fn runtime_error(&mut self, message: &str) {
         let message = message.to_string();
+        let line_number = self.line_number();
 
         self.error_chain.register(LoxError::RuntimeError {
             message,
-            line: self.line_number(),
+            line: line_number,
         })
     }
 
-    pub fn run(&mut self) {
+    pub fn print_errors(&mut self) {
+        self.error_chain.print_all();
+        self.error_chain.errors();
+    }
+
+    pub fn run(&mut self) -> Result<Value, &LoxErrorChain> {
         self.debug_trace_function();
         loop {
             self.debug_trace_instruction();
             let op = self.read_byte();
 
-            match *op {
+            match op {
                 op::ASSERT => {
-                    let val = self.stack.pop().unwrap();
+                    let val = pop_stack!(self);
 
                     match val {
                         Value::Boolean(false) | Value::Nil => {
-                            self.runtime_error("Failed assertion");
-                            // todo: should this exit or just revert to top level?
-                            panic!("Assertion failed: {}", self.error_chain)
+                            self.runtime_error("Assertion Failed!!!");
+                            panic!("{}", self.error_chain);
                         }
                         _ => (),
                     }
@@ -215,92 +353,63 @@ impl VM {
                     self.stack.push(constant);
                 }
                 op::DEFINE_GLOBAL => {
-                    let name = *self.read_byte();
-                    let name = self
-                        .current_closure()
-                        .chunk
-                        .constants
-                        .get(name as usize)
-                        .unwrap()
-                        .as_pointer();
-                    let name = self.memory.retrieve(&name).as_string().clone();
-                    self.globals.insert(name, self.stack.pop().unwrap());
+                    let name = self.read_name();
+                    self.globals.insert(name, pop_stack!(self));
                 }
                 op::GET_GLOBAL => {
-                    let name = *self.read_byte() as usize;
-                    let name = self
-                        .current_closure()
-                        .chunk
-                        .constants
-                        .get(name)
-                        .unwrap()
-                        .as_pointer();
-                    let name = self.memory.retrieve(&name).as_string();
-
-                    self.stack.push(self.globals.get(name).unwrap().clone())
+                    let name = &self.read_name();
+                    self.stack.push(get_global!(self, name))
                 }
                 op::SET_GLOBAL => {
-                    let val = self.stack.pop().unwrap();
-                    let name = *self.read_byte() as usize;
-                    let name = self
-                        .current_closure()
-                        .chunk
-                        .constants
-                        .get(name)
-                        .unwrap()
-                        .as_pointer();
-                    let name = self.memory.retrieve(&name).as_string().clone();
+                    let val = pop_stack!(self);
+                    let name = self.read_name();
 
                     self.globals.insert(name, val.clone());
                     self.stack.push(val) // pancake
                 }
                 op::GET_LOCAL => {
-                    let base = self.frames.last().unwrap().slots;
-                    let offset = *self.read_byte() as usize;
-                    let index = base + offset - 1;
+                    let index = self.get_local();
 
-                    self.stack.push(self.stack.get(index).unwrap().clone())
+                    self.stack.push(get_stack!(self, index).clone())
                 }
                 op::SET_LOCAL => {
-                    let base = self.frames.last().unwrap().slots;
-                    let offset = *self.read_byte() as usize;
-                    let index = base + offset - 1;
+                    let index = self.get_local();
 
-                    let new_value = self.stack.last().unwrap();
+                    let new_value = peek_stack!(self);
                     self.stack[index] = new_value.clone();
                 }
                 op::JUMP => {
                     let jump = self.read_jump();
-                    self.frames.last_mut().unwrap().ip += jump;
+                    get_frame_mut!(self).ip += jump;
                 }
                 op::JUMP_IF_FALSE => {
-                    let condition = self.stack.pop().unwrap().as_boolean() as usize;
+                    let condition = pop_stack!(self).as_boolean() as usize;
                     let condition = 1 - condition;
 
                     let jump = self.read_jump();
                     let jump = jump * condition;
-                    self.frames.last_mut().unwrap().ip += jump;
+                    get_frame_mut!(self).ip += jump;
                 }
                 op::LOOP => {
                     let jump = self.read_jump();
-                    self.frames.last_mut().unwrap().ip -= jump;
+                    get_frame_mut!(self).ip -= jump;
                 }
                 op::POP => {
                     self.stack.pop();
                 }
                 op::PRINT => {
-                    let val = self.stack.pop().unwrap();
+                    let val = pop_stack!(self);
 
                     match val {
                         Value::Nil => println!("nil"),
                         Value::Number(n) => println!("{}", n),
                         Value::Boolean(b) => println!("{}", b),
-                        Value::Object(ptr) => println!("{}", self.memory.retrieve(&ptr)),
+                        Value::Object(ptr) => println!("{}", get_memory!(self, &ptr, _)),
                     }
                 }
                 op::NIL => self.stack.push(Value::Nil),
                 op::NEGATE => {
-                    let val = self.stack.pop().unwrap();
+                    let val = pop_stack!(self);
 
                     match val {
                         Value::Number(n) => self.stack.push(Value::Number(-n)),
@@ -308,26 +417,26 @@ impl VM {
                     }
                 }
                 op::NOT => {
-                    let val = self.stack.pop().unwrap();
+                    let val = pop_stack!(self);
 
                     let opposite = matches!(val, Value::Nil | Value::Boolean(false));
                     self.stack.push(Value::Boolean(opposite))
                 }
                 op::CALL => {
-                    let argc = *self.read_byte();
+                    let argc = self.read_byte();
                     let frame = self.stack.len() - (argc as usize) - 1;
-                    let closure = self.stack.get(frame).unwrap().as_pointer();
+                    let closure = get_stack!(self, frame).as_pointer();
                     self.call(&closure, argc as usize, frame + 1);
                 }
                 op::RETURN => {
-                    let value = self.stack.pop().unwrap();
-                    let frame = self.frames.pop().unwrap();
+                    let value = pop_stack!(self);
+                    let frame = pop_frame!(self);
 
                     if self.frames.is_empty() {
-                        return;
+                        return Ok(value);
                     }
 
-                    for _ in 0..=self.memory.retrieve(&frame.closure).as_function().arity {
+                    for _ in 0..=get_memory!(self, &frame.closure, Object::Function(_)).as_function().arity {
                         self.stack.pop();
                     }
 
@@ -335,8 +444,8 @@ impl VM {
                 }
                 op::ADD => {
                     // Reverse order of arguments a and b to match lexical order
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = pop_stack!(self);
+                    let a = pop_stack!(self);
 
                     if self.is_string(&a) && self.is_string(&b) {
                         let a = a.as_pointer();
@@ -352,8 +461,8 @@ impl VM {
                 }
                 op::SUBTRACT => {
                     // Popped in reverse order they were pushed, expecting a-b
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = pop_stack!(self);
+                    let a = pop_stack!(self);
 
                     if let (Value::Number(a), Value::Number(b)) = (a, b) {
                         self.stack.push(Value::Number(a - b))
@@ -363,8 +472,8 @@ impl VM {
                 }
                 op::MULTIPLY => {
                     // Popped in reverse order they were pushed, expecting a-b
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = pop_stack!(self);
+                    let a = pop_stack!(self);
 
                     if let (Value::Number(a), Value::Number(b)) = (a, b) {
                         self.stack.push(Value::Number(a * b))
@@ -374,8 +483,8 @@ impl VM {
                 }
                 op::DIVIDE => {
                     // Popped in reverse order they were pushed, expecting a-b
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = pop_stack!(self);
+                    let a = pop_stack!(self);
 
                     if let (Value::Number(a), Value::Number(b)) = (a, b) {
                         self.stack.push(Value::Number(a / b))
@@ -384,20 +493,20 @@ impl VM {
                     }
                 }
                 op::AND => {
-                    let v1 = self.stack.pop().unwrap().as_boolean();
-                    let v2 = self.stack.pop().unwrap().as_boolean();
+                    let v1 = pop_stack!(self).as_boolean();
+                    let v2 = pop_stack!(self).as_boolean();
 
                     self.stack.push(Value::Boolean(v1 && v2))
                 }
                 op::EQUAL => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = pop_stack!(self);
+                    let a = pop_stack!(self);
 
                     self.stack.push(Value::Boolean(a.strict_equals(&b)))
                 }
                 op::GREATER => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = pop_stack!(self);
+                    let a = pop_stack!(self);
 
                     if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
                         self.stack.push(Value::Boolean(a > b))
@@ -406,8 +515,8 @@ impl VM {
                     }
                 }
                 op::GREATER_EQUAL => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = pop_stack!(self);
+                    let a = pop_stack!(self);
 
                     if let (Some(a), Some(b)) = (a.as_number(), b.as_number()) {
                         self.stack.push(Value::Boolean(a >= b))
@@ -416,8 +525,8 @@ impl VM {
                     }
                 }
                 op::OR => {
-                    let v1 = self.stack.pop().unwrap().as_boolean();
-                    let v2 = self.stack.pop().unwrap().as_boolean();
+                    let v1 = pop_stack!(self).as_boolean();
+                    let v2 = pop_stack!(self).as_boolean();
 
                     self.stack.push(Value::Boolean(v1 || v2))
                 }
@@ -426,18 +535,18 @@ impl VM {
         }
     }
 
-    pub(crate) fn current_closure(&self) -> &Function {
-        let frame = self.frames.last().unwrap();
-        self.memory.retrieve(&frame.closure).as_function()
+    pub(crate) fn current_closure(&mut self) -> &Function {
+        let frame = get_frame!(self);
+        get_memory!(self, &frame.closure, Object::Function(_)).as_function()
     }
 
-    pub(crate) fn ip(&self) -> usize {
-        self.frames.last().unwrap().ip
+    pub(crate) fn ip(&mut self) -> usize {
+        get_frame!(self).ip
     }
 
     pub fn concatenate(&mut self, v1: MemoryEntry, v2: MemoryEntry) -> Value {
-        let v1 = self.memory.retrieve(&v1).as_string();
-        let v2 = self.memory.retrieve(&v2).as_string();
+        let v1 = get_memory!(self, &v1, Object::String(_)).as_string();
+        let v2 = get_memory!(self, &v2, Object::String(_)).as_string();
 
         let mut result = v1.clone();
         result.push_str(v2);
@@ -445,31 +554,60 @@ impl VM {
         Value::Object(self.memory.allocate(Object::String(Box::new(result))))
     }
 
-    pub fn line_number(&self) -> usize {
-        let frame = self.frames.last().unwrap();
-        *self
+    pub fn line_number(&mut self) -> usize {
+        let frame = get_frame!(self).ip - 1;
+        let line = self
             .current_closure()
             .chunk
             .lines
-            .get(frame.ip - 1)
-            .unwrap()
+            .get(frame);
+
+        match line {
+            Some(line) => *line,
+            None => {
+                self.runtime_error(MEMORY_ERROR);
+                panic!("{}", self.error_chain)
+            }
+        }
     }
 
-    pub fn read_byte(&mut self) -> &u8 {
+    fn byte(&mut self, ip: usize) -> u8 {
+        match self.current_closure().chunk.code.get(ip) {
+            Some(byte) => *byte,
+            None => {
+                self.runtime_error(MEMORY_ERROR);
+                self.print_errors();
+                panic!("{}", self.error_chain);
+            }
+        }
+    }
+
+    pub fn peek_byte(&mut self) -> u8 {
+        self.byte(get_frame!(self).ip)
+    }
+
+    pub fn read_byte(&mut self) -> u8 {
         let ip = self.ip();
-        self.frames.last_mut().unwrap().ip += 1;
-
-        self.current_closure().chunk.code.get(ip).unwrap()
+        get_frame_mut!(self).ip += 1;
+        self.byte(ip)
     }
 
-    pub fn read_constant(&mut self) -> &Value {
-        let index = *self.read_byte() as usize;
-        self.current_closure().chunk.constants.get(index).unwrap()
+    pub fn read_constant(&mut self) -> Value {
+        let index = self.read_byte() as usize;
+        let constant = self.current_closure().chunk.constants.get(index);
+        match constant {
+            Some(val) => val.clone(),
+            None => {
+                self.runtime_error(CONSTANT_ERROR);
+                self.print_errors();
+                panic!("{}", self.error_chain);
+            }
+        }
     }
 
     pub fn read_jump(&mut self) -> usize {
-        let high = *self.read_byte() as usize;
-        let low = *self.read_byte() as usize;
+        let high = self.read_byte() as usize;
+        let low = self.read_byte() as usize;
 
         (high << 8) | low
     }
@@ -477,10 +615,22 @@ impl VM {
     pub fn is_string(&self, value: &Value) -> bool {
         match value {
             Value::Object(ptr) => {
-                matches!(self.memory.retrieve(ptr), Object::String(_))
+                let obj = get_memory!(self, ptr, _);
+                matches!(obj, Object::String(_))
             }
             _ => false,
         }
+    }
+
+    fn get_local(&mut self) -> usize {
+        let base = get_frame!(self).slots;
+        let offset = self.read_byte() as usize;
+        return base + offset - 1;
+    }
+
+    fn read_name(&mut self) -> String {
+        let name = self.read_constant().as_pointer();
+        return get_memory!(self, &name, Object::String(_)).as_string().clone();
     }
 }
 
@@ -553,7 +703,7 @@ impl Error for LoxErrorChain {}
 mod test {
     use super::*;
 
-    macro_rules! test_program_failure {
+    macro_rules! test_program_assertion {
         ($test_name:ident, $text:literal) => {
             #[test]
             #[should_panic]
@@ -564,8 +714,26 @@ mod test {
                     crate::debug::DEBUG_TRACE_EXECUTION = true;
                 }
                 match VM::default().interpret($text) {
-                    Err((_vm, e)) => println!("!!! Error in compilation: {}", e),
+                    Err(vm) => println!("!!! Error in compilation: {}", vm.error_chain),
                     _ => (),
+                }
+            }
+        };
+    }
+
+    macro_rules! test_program_failure {
+        ($test_name:ident, $text:literal) => {
+            #[test]
+            fn $test_name() {
+                unsafe {
+                    // Debug print in case the test fails, makes debugging easier
+                    crate::debug::DEBUG_PRINT_CODE = true;
+                    crate::debug::DEBUG_TRACE_EXECUTION = true;
+                }
+                // todo: assert on the kind of failure
+                match VM::default().interpret($text) {
+                    Err(_) => (),
+                    _ => panic!("Program did not cause compilation or runtime error.")
                 }
             }
         };
@@ -584,9 +752,8 @@ mod test {
                 println!("Interpreting program:\n{}", $text);
                 match VM::default().interpret($text) {
                     Ok(_) => (),
-                    Err((_, e)) => {
-                        println!("!!! Error interpreting statement\n{}", e);
-                        panic!()
+                    Err(vm) => {
+                        panic!("!!! Error interpreting statement\n{}", vm.error_chain)
                     }
                 }
             }
@@ -863,6 +1030,16 @@ mod test {
     }
 
     test_program_failure! {
+        reference_unset_global_variable_exits_early,
+        "
+        {
+            var y = x + 1;
+        }
+        assert false;
+        "
+    }
+
+    test_program_assertion! {
         assert_failure_to_prove_function_called,
         "
         fun f() {
@@ -875,16 +1052,7 @@ mod test {
         "
     }
 
-    test_program_failure! {
-        reference_unset_global_variable,
-        "
-        {
-            var y = x + 1;
-        }
-        "
-    }
-
-    test_program_failure! {
+    test_program_assertion! {
         assert_false,
         "assert false;"
     }

@@ -15,8 +15,8 @@ pub trait GraphAssembly {
 }
 
 pub trait DebugTrace {
-    fn debug_trace_instruction(&self);
-    fn debug_trace_function(&self);
+    fn debug_trace_instruction(&mut self);
+    fn debug_trace_function(&mut self);
 }
 
 trait DisassembleInstruction {
@@ -131,7 +131,7 @@ impl GraphAssembly for Function {
 }
 
 impl DebugTrace for VM {
-    fn debug_trace_function(&self) {
+    fn debug_trace_function(&mut self) {
         unsafe {
             if !DEBUG_TRACE_EXECUTION {
                 return;
@@ -148,7 +148,7 @@ impl DebugTrace for VM {
         );
     }
 
-    fn debug_trace_instruction(&self) {
+    fn debug_trace_instruction(&mut self) {
         unsafe {
             if !DEBUG_TRACE_EXECUTION {
                 return;
@@ -163,7 +163,7 @@ impl DebugTrace for VM {
 
         let show_val = |v: &Value| -> String {
             match v {
-                Value::Object(ptr) => format!("{}", self.memory.retrieve(ptr)),
+                Value::Object(ptr) => format!("{}", crate::get_memory!(self, ptr, _)),
                 _ => format!("{}", v),
             }
         };
@@ -283,7 +283,7 @@ impl Function {
 }
 
 impl VM {
-    fn get_line_part(&self, i: usize) -> String {
+    fn get_line_part(&mut self, i: usize) -> String {
         if i == 0 {
             return format!("{:<4}", "|");
         }

@@ -51,12 +51,12 @@ impl Memory {
         }
     }
 
-    pub fn retrieve_mut(&mut self, index: &MemoryEntry) -> &mut Object {
-        self.memory.get_mut(index).unwrap()
+    pub fn retrieve_mut(&mut self, index: &MemoryEntry) -> Option<&mut Object> {
+        self.memory.get_mut(index)
     }
 
-    pub fn retrieve(&self, index: &MemoryEntry) -> &Object {
-        self.memory.get(index).unwrap()
+    pub fn retrieve(&self, index: &MemoryEntry) -> Option<&Object> {
+        self.memory.get(index)
     }
 
     pub fn intern(&mut self, string: Box<String>) -> MemoryEntry {

@@ -59,9 +59,12 @@ impl Lox {
         for line in lock.lines() {
             self.vm = match self.vm.interpret(line?.as_str()) {
                 // todo: have interpret return a value and print that value...
-                Ok(vm) => vm,
-                Err((vm, err)) => {
-                    println!("{}", err);
+                Ok((vm, value)) => {
+                    println!("{}", value);
+                    vm
+                },
+                Err(mut vm) => {
+                    vm.print_errors();
                     vm
                 }
             };
@@ -81,8 +84,8 @@ impl Lox {
 
         file.read_to_string(&mut contents)?;
 
-        if let Err((_vm, err)) = self.vm.interpret(contents.as_str()) {
-            println!("{}", err)
+        if let Err(mut vm) = self.vm.interpret(contents.as_str()) {
+            vm.print_errors();
         }
 
         Ok(())
@@ -114,7 +117,11 @@ mod test {
 
                 match VM::default().interpret(contents.as_str()) {
                     Ok(_) => (),
-                    Err((_vm, err)) => panic!("Failing test because of error:\n{}", err),
+                    Err(mut vm) => {
+                        println!("Failing test because of error");
+                        vm.print_errors();
+                        panic!()
+                    }
                 }
 
                 Ok(())
