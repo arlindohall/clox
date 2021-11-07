@@ -158,13 +158,13 @@ impl VM {
             }
         };
 
-        self.call(&function, 0);
+        self.call(&function, 0, 0);
         self.run();
 
         Ok(self)
     }
 
-    fn call(&mut self, mem_entry: &MemoryEntry, argc: usize) {
+    fn call(&mut self, mem_entry: &MemoryEntry, argc: usize, slots: usize) {
         let closure = self.memory.retrieve_mut(mem_entry).as_function();
         if closure.arity != argc {
             let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
@@ -178,8 +178,7 @@ impl VM {
         self.frames.push(CallFrame {
             closure: mem_entry.clone(),
             ip: 0,
-            slots: 0,
-            // slots: self.stack.len() - argc - 1,
+            slots,
         });
     }
 
@@ -315,17 +314,10 @@ impl VM {
                     self.stack.push(Value::Boolean(opposite))
                 }
                 op::CALL => {
-                    let args = *self.read_byte();
-                    let frame = self.stack.len() - (args as usize) - 1;
+                    let argc = *self.read_byte();
+                    let frame = self.stack.len() - (argc as usize) - 1;
                     let closure = self.stack.get(frame).unwrap().as_pointer();
-
-                    let frame = CallFrame {
-                        closure,
-                        ip: 0,
-                        slots: frame,
-                    };
-
-                    self.frames.push(frame);
+                    self.call(&closure, argc as usize, frame + 1);
                 }
                 op::RETURN => {
                     let value = self.stack.pop().unwrap();
@@ -572,6 +564,7 @@ mod test {
                     crate::debug::DEBUG_TRACE_EXECUTION = true;
                 }
                 match VM::default().interpret($text) {
+                    Err((_vm, e)) => println!("!!! Error in compilation: {}", e),
                     _ => (),
                 }
             }
@@ -852,7 +845,7 @@ mod test {
     test_program! {
         call_function,
         "
-        function f(x, y) {
+        fun f(x, y) {
             return x + y;
         }
 
@@ -863,7 +856,7 @@ mod test {
     test_program_failure! {
         assert_failure_to_prove_function_called,
         "
-        function f() {
+        fun f() {
             return;
         }
 

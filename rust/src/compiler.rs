@@ -184,7 +184,7 @@ impl<'a> Compiler<'a> {
     }
 
     pub fn spawn(&mut self, name: &MemoryEntry) -> Compiler {
-        let name = self.vm.memory.retrieve(&name).as_string().clone();
+        let name = self.vm.memory.retrieve(name).as_string().clone();
         let entry_point = Function {
             name,
             arity: 0,
@@ -478,7 +478,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn function_body(&mut self) -> Result<MemoryEntry, LoxErrorChain> {
-        let name = self.copy_string().clone();
+        let name = self.copy_string();
         let mut compiler = self.spawn(&name);
 
         compiler.function_parameters();
@@ -516,6 +516,7 @@ impl<'a> Compiler<'a> {
     fn function_call(&mut self) {
         if self.match_(RightParen) {
             self.emit_bytes(op::CALL, 0);
+            return;
         }
 
         let mut args = 0;
