@@ -163,10 +163,16 @@ macro_rules! get_frame_mut {
 macro_rules! get_object {
     ($vm:ident, $ptr:expr, $type:pat) => {
         {
+            let p: *mut VM = $vm;
             let obj = $vm.get_object($ptr);
             match obj {
                 $type => obj,
-                _ => panic!("{}", MEMORY_ERROR)
+                _ => unsafe {
+                    let vm = p.as_mut().unwrap();
+                    vm.runtime_error(MEMORY_ERROR);
+                    vm.print_errors();
+                    panic!("{}", vm.error_chain)
+                }
             }
         }
     }
