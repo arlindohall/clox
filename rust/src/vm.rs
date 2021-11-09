@@ -6,6 +6,7 @@ use crate::compiler::Compiler;
 use crate::compiler::Function;
 use crate::compiler::Parser;
 use crate::debug::DebugTrace;
+use crate::object::Upvalue;
 use crate::object::{Closure, Memory, MemoryEntry, Object};
 use crate::scanner::Scanner;
 use crate::value::Value;
@@ -46,6 +47,7 @@ pub struct VM {
 
     /// Frames are public so the `debug` module can use them
     frames: Vec<CallFrame>,
+    open_upvalues: Vec<Upvalue>,
 
     error_chain: LoxErrorChain,
 }
@@ -149,6 +151,7 @@ pub mod op {
         And,
         Assert,
         Call,
+        CloseUpvalue,
         Closure,
         Constant,
         DefineGlobal,
@@ -181,6 +184,7 @@ pub mod op {
     pub const AND: u8 = And as u8;
     pub const ASSERT: u8 = Assert as u8;
     pub const CALL: u8 = Call as u8;
+    pub const CLOSE_UPVALUE: u8 = CloseUpvalue as u8;
     pub const CLOSURE: u8 = Closure as u8;
     pub const CONSTANT: u8 = Constant as u8;
     pub const DEFINE_GLOBAL: u8 = DefineGlobal as u8;
@@ -222,6 +226,7 @@ impl Default for VM {
             globals: HashMap::new(),
             memory: Memory::default(),
             frames: Vec::new(),
+            open_upvalues: Vec::new(),
             error_chain: LoxErrorChain::default(),
         }
     }
@@ -260,9 +265,8 @@ impl VM {
     }
 
     fn call(&mut self, mem_entry: MemoryEntry, argc: usize, slots: usize) {
-        // todo: replace all functions with closures but also only return function from
-        // compiler and define closure at runtime, and for top-level make special
-        // closure object
+        self.debug_trace_function(mem_entry);
+
         let function = self.get_closure_mut(mem_entry).function;
         let function = self.get_function(function);
         if function.arity != argc {
@@ -296,7 +300,6 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Result<Value, &LoxErrorChain> {
-        self.debug_trace_function();
         loop {
             self.debug_trace_instruction();
             let op = self.read_byte();
@@ -350,22 +353,61 @@ impl VM {
                 }
                 op::GET_UPVALUE => {
                     let index = self.read_byte();
-                    self.get_upvalue(index);
+                    let value = self.get_upvalue(index).value(&self);
+                    self.stack.push(value);
                 }
                 op::SET_UPVALUE => {
                     todo!("Set upvalue")
                 }
                 op::CLOSURE => {
                     let function = self.read_constant().as_pointer();
-                    let upvalues = self.read_byte() as usize;
+                    let upvalue_count = self.read_byte() as usize;
+                    
+                    let mut upvalues = Vec::new();
+
+                    for _ in 0..upvalue_count {
+                        let is_local = self.read_byte() != 0;
+                        let index = self.read_byte() as usize;
+
+                        let upvalue = self.find_upvalue(is_local, index);
+                        upvalues.push(upvalue);
+                    }
 
                     let closure = Closure {
                         function,
-                        upvalues: Vec::with_capacity(upvalues),
+                        upvalues,
                     };
 
                     let ptr = self.memory.allocate(Object::Closure(Box::new(closure)));
+
+                    for (i, upvalue) in &mut self.get_closure_mut(ptr).upvalues.iter_mut().enumerate() {
+                        upvalue.closure = (ptr, i);
+                    }
+                    for upvalue in self.get_closure(ptr).upvalues.clone() {
+                        self.open_upvalues.push(upvalue);
+                    }
+
                     self.stack.push(Value::Object(ptr))
+                }
+                op::CLOSE_UPVALUE => {
+                    dbg!(&self.open_upvalues);
+                    loop {
+                        if self.open_upvalues.is_empty() {
+                            break;
+                        }
+                        let upvalue = *self.open_upvalues.last().unwrap();
+                        let value = upvalue.value(&self);
+                        if upvalue.should_close(self.stack.len(), &self) {
+                            self.open_upvalues.pop();
+                            let (closure, index) = upvalue.closure;
+                            self.get_closure_mut(closure)
+                                .upvalues[index]
+                                .close(value);
+                            continue;
+                        }
+                        break;
+                    }
+                    self.stack.pop();
                 }
                 op::JUMP => {
                     let jump = self.read_jump();
@@ -418,6 +460,7 @@ impl VM {
                     self.call(closure, argc as usize, frame + 1);
                 }
                 op::RETURN => {
+
                     let value = pop_stack!(self);
                     let frame = pop_frame!(self);
 
@@ -425,6 +468,7 @@ impl VM {
                         return Ok(value);
                     }
 
+                    self.debug_trace_function(get_frame!(self).closure);
                     let function = self.get_closure(frame.closure).function;
                     let function = self.get_function(function);
                     for _ in 0..=function.arity {
@@ -521,12 +565,17 @@ impl VM {
 
                     self.stack.push(Value::Boolean(v1 || v2))
                 }
-                28_u8..=u8::MAX => {
+                30_u8..=u8::MAX => {
                     let msg = format!("Invalid bytecode {}", op);
                     self.fatal_error(&msg)
                 }
             }
         }
+    }
+
+    pub fn current_closure_mut(&mut self) -> &mut Closure {
+        let frame = get_frame!(self).closure;
+        self.get_closure_mut(frame)
     }
 
     pub fn current_closure(&self) -> &Closure {
@@ -648,15 +697,23 @@ impl VM {
     fn get_local(&mut self) -> usize {
         let base = get_frame!(self).slots;
         let offset = self.read_byte() as usize;
-        base + offset - 1
+        base + offset
     }
 
-    fn get_upvalue(&mut self, index: u8) -> Value {
+    pub(crate) fn get_upvalue(&self, index: u8) -> &Upvalue {
         self.current_closure()
             .upvalues
             .get(index as usize)
             .unwrap()
-            .value()
+    }
+
+    fn find_upvalue(&self, is_local: bool, index: usize) -> Upvalue {
+        if is_local {
+            let base = get_frame!(self).slots;
+            return Upvalue::from_local(base + index);
+        }
+
+        Upvalue::from_closed(index)
     }
 
     fn read_name(&mut self) -> String {

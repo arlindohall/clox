@@ -45,7 +45,7 @@ pub struct Local {
     is_captured: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Upvalue {
     index: u8,
     is_local: bool,
@@ -500,12 +500,19 @@ impl<'a> Compiler<'a> {
         compiler.consume(LeftBrace, "Expected '{' before function body.");
         compiler.block()?;
 
-        let upvalues = compiler.upvalues.len() as u8;
+        let upvalues = compiler.upvalues.clone();
         let function = compiler.end_compiler()?;
 
         let function_constant = self.make_constant(Value::Object(function));
         self.emit_byte(op::CLOSURE);
-        self.emit_bytes(function_constant, upvalues);
+        self.emit_bytes(function_constant, upvalues.len() as u8);
+
+        for upvalue in upvalues {
+            self.emit_bytes(
+                upvalue.is_local as u8,
+                upvalue.index
+            );
+        }
 
         Ok(function)
     }
@@ -798,10 +805,15 @@ impl<'a> Compiler<'a> {
             if self.locals.is_empty() {
                 return;
             }
-            if self.locals.last().unwrap().depth <= self.scope_depth {
+            let local = self.locals.last().unwrap();
+            if local.depth <= self.scope_depth {
                 return;
             }
-            self.emit_byte(op::POP);
+            if local.is_captured {
+                self.emit_byte(op::CLOSE_UPVALUE);
+            } else {
+                self.emit_byte(op::POP);
+            }
             self.locals.pop();
         }
     }
@@ -1011,7 +1023,7 @@ impl<'a> Compiler<'a> {
     fn resolve_local(&mut self) -> isize {
         for (i, local) in self.locals.iter().enumerate() {
             if self.prev_identifier_equals(&local.name) {
-                return (i + 1) as isize; // Always -1 or 1..256
+                return i as isize; // Always -1 or 1..256
             }
         }
 
@@ -1405,10 +1417,10 @@ mod test {
             op::CONSTANT,
             0,
             op::SET_LOCAL,
-            1,
+            0,
             op::POP,
             op::GET_LOCAL,
-            1,
+            0,
             op::POP,
             op::POP,
             op::NIL,
@@ -1606,8 +1618,10 @@ mod test {
             op::CLOSURE,
             1,
             1,
+            true as u8,
+            0,
             op::POP,
-            op::POP,
+            op::CLOSE_UPVALUE,
             op::NIL,
             op::RETURN
         ]

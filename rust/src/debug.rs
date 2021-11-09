@@ -1,4 +1,5 @@
 use crate::compiler::Function;
+use crate::object::MemoryEntry;
 use crate::value::Value;
 use crate::vm::{op::*, VM};
 
@@ -16,7 +17,7 @@ pub trait GraphAssembly {
 
 pub trait DebugTrace {
     fn debug_trace_instruction(&mut self);
-    fn debug_trace_function(&mut self);
+    fn debug_trace_function(&mut self, ptr: MemoryEntry);
 }
 
 trait DisassembleInstruction {
@@ -49,6 +50,7 @@ impl Disassembler for Function {
                 AND => Self::print_instruction,
                 ASSERT => Self::print_instruction,
                 CALL => Self::print_local,
+                CLOSE_UPVALUE => Self::print_instruction,
                 CLOSURE => Self::print_closure,
                 CONSTANT => Self::print_constant,
                 DEFINE_GLOBAL => Self::print_constant,
@@ -74,7 +76,7 @@ impl Disassembler for Function {
                 SET_LOCAL => Self::print_local,
                 SET_UPVALUE => Self::print_local,
                 SUBTRACT => Self::print_instruction,
-                29_u8..=u8::MAX => panic!("Invalid opcode."),
+                30_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op.bytecode_name());
@@ -101,6 +103,7 @@ impl GraphAssembly for Function {
                 AND => Self::graph_instruction,
                 ASSERT => Self::graph_instruction,
                 CALL => Self::graph_local,
+                CLOSE_UPVALUE => Self::graph_instruction,
                 CLOSURE => Self::graph_closure,
                 CONSTANT => Self::graph_constant,
                 DEFINE_GLOBAL => Self::graph_constant,
@@ -126,7 +129,7 @@ impl GraphAssembly for Function {
                 SET_LOCAL => Self::graph_local,
                 SET_UPVALUE => Self::graph_local,
                 SUBTRACT => Self::graph_instruction,
-                29_u8..=u8::MAX => panic!("Invalid opcode."),
+                30_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op);
@@ -168,17 +171,19 @@ impl DebugTrace for VM {
         eprintln!("{:04} {}{:16} {}", ip, line_part, op, stack);
     }
 
-    fn debug_trace_function(&mut self) {
+    fn debug_trace_function(&mut self, ptr: MemoryEntry) {
         unsafe {
             if !DEBUG_TRACE_EXECUTION {
                 return;
             }
         }
+        let function = self.get_closure_mut(ptr).function;
+        let function = self.get_function(function);
 
         eprintln!(
-            "----- execute::{} -----",
-            if !self.current_function().name.is_empty() {
-                &self.current_function().name
+            "----- function =={}== -----",
+            if !function.name.is_empty() {
+                &function.name
             } else {
                 "<script>"
             }
@@ -240,17 +245,24 @@ impl Function {
         i + 3
     }
 
-    fn print_closure(&self, i: usize, op: &str) -> usize {
-        let function = self.chunk.code.get(i + 1).unwrap();
-        let upval_count = self.chunk.code.get(i + 1).unwrap();
+    fn print_closure(&self, mut i: usize, op: &str) -> usize {
         let line_part = self.get_line_part(i);
+        let function = self.chunk.code.get(i + 1).unwrap();
+        let upval_count = *self.chunk.code.get(i + 2).unwrap() as usize;
+        i += 3;
 
-        eprintln!(
-            "{:04} {}{:16}{:10}, {}",
-            i, line_part, op, function, upval_count
-        );
+        eprintln!("{:04} {}{:16}{:10}, {}:", i, line_part, op, function, upval_count);
 
-        i + 3
+        for upv in 0..upval_count {
+            eprintln!(
+                "{}(is_local={}, index={}) ",
+                "           UPVALUE",
+                *self.chunk.code.get(i + (2 * upv)).unwrap() != 0,
+                self.chunk.code.get(i + (2 * upv) + 1).unwrap()
+            )
+        }
+
+        i + (upval_count * 2)
     }
 
     fn print_local(&self, i: usize, op: &str) -> usize {
@@ -330,6 +342,7 @@ impl DisassembleInstruction for u8 {
             ASSERT => "OP_ASSERT",
             CALL => "OP_CALL",
             CLOSURE => "OP_CLOSURE",
+            CLOSE_UPVALUE => "OP_CLOSE_UPVALUE",
             CONSTANT => "OP_CONSTANT",
             DEFINE_GLOBAL => "OP_DEFINE_GLOBAL",
             DIVIDE => "OP_DIVIDE",
@@ -354,7 +367,7 @@ impl DisassembleInstruction for u8 {
             SET_LOCAL => "OP_SET_LOCAL",
             SET_UPVALUE => "OP_SET_UPVALUE",
             SUBTRACT => "OP_SUBTRACT",
-            29_u8..=u8::MAX => panic!("Invalid Opcode."),
+            30_u8..=u8::MAX => panic!("Invalid Opcode."),
         }
     }
 }

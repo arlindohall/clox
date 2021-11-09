@@ -1,6 +1,6 @@
-use std::{collections::HashMap, fmt::Display, pin::Pin};
+use std::{collections::HashMap, fmt::Display};
 
-use crate::{compiler::Function, value::Value};
+use crate::{compiler::Function, value::Value, vm::VM};
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct MemoryEntry {
@@ -27,11 +27,21 @@ pub enum Object {
     Upvalue(Box<Upvalue>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Upvalue {
-    value: Option<Pin<Value>>,
-    location: *const Value,
+    value: UpvalueWrapper,
+    pub closure: (MemoryEntry, usize),
 }
+
+#[derive(Debug, Clone)]
+enum UpvalueWrapper {
+    Value(Value),
+    StackPointer(usize),
+    UpvaluePointer(usize),
+}
+
+impl Copy for Upvalue {}
+impl Copy for UpvalueWrapper {}
 
 #[derive(Debug)]
 pub struct Closure {
@@ -113,7 +123,7 @@ impl Display for Object {
             Object::_Instance() => todo!("display an instance"),
             Object::_Native() => todo!("display a native function"),
             Object::String(s) => write!(f, "\"{}\"", s),
-            Object::Upvalue(u) => write!(f, "{}", u.value()),
+            Object::Upvalue(_) => panic!("(Internal) cannot display closed stack object"),
             Object::Closure(_) => panic!("(Internal) cannot display closure object"),
         }
     }
@@ -157,7 +167,41 @@ impl Object {
 }
 
 impl Upvalue {
-    pub fn value(&self) -> Value {
-        unsafe { *self.location }
+
+    pub fn from_local(local: usize) -> Upvalue {
+        Upvalue {
+            value: UpvalueWrapper::StackPointer(local),
+            closure: (mem(0), 0),
+        }
+    }
+
+    pub fn from_closed(upvalue: usize) -> Upvalue {
+        Upvalue {
+            value: UpvalueWrapper::UpvaluePointer(upvalue),
+            closure: (mem(0), 0),
+        }
+    }
+
+    pub fn should_close(&self, current_stack: usize, vm: &VM) -> bool {
+        match self.value {
+            UpvalueWrapper::StackPointer(p) => p <= current_stack,
+            UpvalueWrapper::UpvaluePointer(v) => vm.get_upvalue(v as u8).should_close(current_stack, vm),
+            UpvalueWrapper::Value(_) => panic!("(Internal) value already closed is still open in VM."),
+        }
+    }
+
+    pub fn close(&mut self, value: Value) {
+        std::mem::swap(self, &mut Upvalue {
+            value: UpvalueWrapper::Value(value),
+            closure: self.closure,
+        });
+    }
+
+    pub fn value(&self, vm: &VM) -> Value {
+        match self.value {
+            UpvalueWrapper::Value(v) => v,
+            UpvalueWrapper::StackPointer(p) => *vm.stack.get(p).unwrap(),
+            UpvalueWrapper::UpvaluePointer(p) => vm.get_upvalue(p as u8).value(vm),
+        }
     }
 }
