@@ -96,15 +96,6 @@ macro_rules! peek_stack {
     };
 }
 
-macro_rules! get_global {
-    ($vm:ident, $name:ident) => {
-        match $vm.globals.get($name) {
-            Some(mem) => *mem,
-            None => $vm.fatal_error(GLOBAL_ERROR),
-        }
-    };
-}
-
 macro_rules! pop_frame {
     ($vm:ident) => {
         match $vm.frames.pop() {
@@ -331,7 +322,15 @@ impl VM {
                 }
                 op::GET_GLOBAL => {
                     let name = &self.read_name();
-                    self.stack.push(get_global!(self, name))
+                    let global = match self.globals.get(name).map(|v| *v) {
+                        Some(mem) => mem,
+                        None => {
+                            self.runtime_error(GLOBAL_ERROR);
+                            return Err(&self.error_chain);
+                        }
+                    };
+
+                    self.stack.push(global)
                 }
                 op::SET_GLOBAL => {
                     let val = pop_stack!(self);
