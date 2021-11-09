@@ -17,6 +17,8 @@ pub enum Value {
     Nil,
 }
 
+impl Copy for Value {}
+
 impl Value {
     pub fn as_pointer(&self) -> MemoryEntry {
         if let Value::Object(ptr) = self {

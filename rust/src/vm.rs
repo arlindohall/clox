@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
+use crate::compiler::Compiler;
+use crate::compiler::Function;
 use crate::compiler::Parser;
-use crate::compiler::{Compiler, Function};
 use crate::debug::DebugTrace;
-use crate::object::{Memory, MemoryEntry, Object};
+use crate::object::{Closure, Memory, MemoryEntry, Object};
 use crate::scanner::Scanner;
 use crate::value::Value;
 
@@ -72,121 +73,82 @@ macro_rules! pop_stack {
     ($vm:ident) => {
         match $vm.stack.pop() {
             Some(val) => val,
-            None => {
-                $vm.runtime_error(STACK_ERROR);
-                $vm.print_errors();
-                panic!("{}", $vm.error_chain);
-            }
+            None => $vm.fatal_error(STACK_ERROR),
         }
-    }
+    };
 }
 
 macro_rules! get_stack {
     ($vm:ident, $index:expr) => {
         match $vm.stack.get($index) {
             Some(val) => val,
-            None => {
-                $vm.runtime_error(STACK_ERROR);
-                $vm.print_errors();
-                panic!("{}", $vm.error_chain);
-            }
+            None => $vm.fatal_error(STACK_ERROR),
         }
-    }
+    };
 }
 
 macro_rules! peek_stack {
     ($vm:ident) => {
         match $vm.stack.last() {
             Some(val) => val,
-            None => {
-                $vm.runtime_error(STACK_ERROR);
-                $vm.print_errors();
-                panic!("{}", $vm.error_chain);
-            }
+            None => $vm.fatal_error(STACK_ERROR),
         }
-    }
-
+    };
 }
 
 macro_rules! get_global {
     ($vm:ident, $name:ident) => {
         match $vm.globals.get($name) {
-            Some(mem) => mem.clone(),
-            None => {
-                $vm.runtime_error(GLOBAL_ERROR);
-                $vm.print_errors();
-                return Err(&$vm.error_chain)
-            }
+            Some(mem) => *mem,
+            None => $vm.fatal_error(GLOBAL_ERROR),
         }
-    }
+    };
 }
 
 macro_rules! pop_frame {
     ($vm:ident) => {
         match $vm.frames.pop() {
             Some(frame) => frame,
-            None => {
-                $vm.runtime_error(STACK_UNDERFLOW);
-                $vm.print_errors();
-                panic!("{}", $vm.error_chain);
-            }
+            None => $vm.fatal_error(STACK_UNDERFLOW),
         }
-    }
+    };
 }
 
 macro_rules! get_frame {
     ($vm:ident) => {
         match $vm.frames.last() {
             Some(frame) => frame,
-            None => {
-                $vm.runtime_error(STACK_UNDERFLOW);
-                $vm.print_errors();
-                panic!("{}", $vm.error_chain);
-            }
+            None => $vm.fatal_error(STACK_UNDERFLOW),
         }
-    }
+    };
 }
 
 macro_rules! get_frame_mut {
     ($vm:ident) => {
         match $vm.frames.last_mut() {
             Some(frame) => frame,
-            None => {
-                $vm.runtime_error(STACK_UNDERFLOW);
-                $vm.print_errors();
-                panic!("{}", $vm.error_chain);
-            }
+            None => $vm.fatal_error(STACK_UNDERFLOW),
         }
-    }
+    };
 }
 
 macro_rules! get_object {
-    ($vm:ident, $ptr:expr, $type:pat) => {
-        {
-            let p: *mut VM = $vm;
-            let obj = $vm.get_object($ptr);
-            match obj {
-                $type => obj,
-                _ => unsafe {
-                    let vm = p.as_mut().unwrap();
-                    vm.runtime_error(MEMORY_ERROR);
-                    vm.print_errors();
-                    panic!("{}", vm.error_chain)
-                }
-            }
+    ($vm:ident, $ptr:expr, $type:pat) => {{
+        let obj = $vm.get_object($ptr);
+        match obj {
+            $type => obj,
+            _ => $vm.fatal_error(MEMORY_ERROR),
         }
-    }
+    }};
 }
 macro_rules! get_object_mut {
-    ($vm:ident, $ptr:expr, $type:pat) => {
-        {
-            let obj = $vm.get_object_mut($ptr);
-            match obj {
-                $type => obj,
-                _ => panic!("{}", MEMORY_ERROR)
-            }
+    ($vm:ident, $ptr:expr, $type:pat) => {{
+        let obj: *mut Object = $vm.get_object_mut($ptr);
+        match unsafe { &mut *obj as &mut Object } {
+            $type => unsafe { &mut *obj as &mut Object },
+            _ => $vm.fatal_error(MEMORY_ERROR),
         }
-    }
+    }};
 }
 
 pub mod op {
@@ -196,12 +158,14 @@ pub mod op {
         And,
         Assert,
         Call,
+        Closure,
         Constant,
         DefineGlobal,
         Divide,
         Equal,
         GetGlobal,
         GetLocal,
+        GetUpvalue,
         Greater,
         GreaterEqual,
         Jump,
@@ -217,6 +181,7 @@ pub mod op {
         Return,
         SetGlobal,
         SetLocal,
+        SetUpvalue,
         Subtract,
     }
     use Op::*;
@@ -225,12 +190,14 @@ pub mod op {
     pub const AND: u8 = And as u8;
     pub const ASSERT: u8 = Assert as u8;
     pub const CALL: u8 = Call as u8;
+    pub const CLOSURE: u8 = Closure as u8;
     pub const CONSTANT: u8 = Constant as u8;
     pub const DEFINE_GLOBAL: u8 = DefineGlobal as u8;
     pub const DIVIDE: u8 = Divide as u8;
     pub const EQUAL: u8 = Equal as u8;
     pub const GET_GLOBAL: u8 = GetGlobal as u8;
     pub const GET_LOCAL: u8 = GetLocal as u8;
+    pub const GET_UPVALUE: u8 = GetUpvalue as u8;
     pub const GREATER: u8 = Greater as u8;
     pub const GREATER_EQUAL: u8 = GreaterEqual as u8;
     pub const JUMP: u8 = Jump as u8;
@@ -246,6 +213,7 @@ pub mod op {
     pub const RETURN: u8 = Return as u8;
     pub const SET_GLOBAL: u8 = SetGlobal as u8;
     pub const SET_LOCAL: u8 = SetLocal as u8;
+    pub const SET_UPVALUE: u8 = SetUpvalue as u8;
     pub const SUBTRACT: u8 = Subtract as u8;
 }
 
@@ -286,18 +254,28 @@ impl VM {
             }
         };
 
+        self.stack.push(Value::Object(function));
+        let function = self.memory.allocate(Object::Closure(Box::new(Closure {
+            upvalues: Vec::new(),
+            function,
+        })));
+        self.stack.pop();
+
         self.call(function, 0, 0);
         match self.run() {
             Ok(value) => Ok((self, value)),
             Err(_) => Err(self),
         }
-
     }
 
     fn call(&mut self, mem_entry: MemoryEntry, argc: usize, slots: usize) {
-        let closure = self.get_object_mut(mem_entry).as_function();
-        if closure.arity != argc {
-            let message = &format!("Expected {} arguments but got {}", closure.arity, argc);
+        // todo: replace all functions with closures but also only return function from
+        // compiler and define closure at runtime, and for top-level make special
+        // closure object
+        let function = self.get_closure_mut(mem_entry).function;
+        let function = self.get_function(function);
+        if function.arity != argc {
+            let message = &format!("Expected {} arguments but got {}", function.arity, argc);
             self.runtime_error(message);
         }
 
@@ -322,9 +300,8 @@ impl VM {
         })
     }
 
-    pub fn print_errors(&mut self) {
+    pub fn print_errors(&self) {
         self.error_chain.print_all();
-        self.error_chain.errors();
     }
 
     pub fn run(&mut self) -> Result<Value, &LoxErrorChain> {
@@ -339,14 +316,13 @@ impl VM {
 
                     match val {
                         Value::Boolean(false) | Value::Nil => {
-                            self.runtime_error("Assertion Failed!!!");
-                            panic!("{}", self.error_chain);
+                            self.fatal_error("Assertion Failed!!!");
                         }
                         _ => (),
                     }
                 }
                 op::CONSTANT => {
-                    let constant = self.read_constant().clone();
+                    let constant = self.read_constant();
                     self.stack.push(constant);
                 }
                 op::DEFINE_GLOBAL => {
@@ -361,19 +337,36 @@ impl VM {
                     let val = pop_stack!(self);
                     let name = self.read_name();
 
-                    self.globals.insert(name, val.clone());
+                    self.globals.insert(name, val);
                     self.stack.push(val) // pancake
                 }
                 op::GET_LOCAL => {
                     let index = self.get_local();
 
-                    self.stack.push(get_stack!(self, index).clone())
+                    self.stack.push(*get_stack!(self, index))
                 }
                 op::SET_LOCAL => {
                     let index = self.get_local();
+                    self.stack[index] = *peek_stack!(self);
+                }
+                op::GET_UPVALUE => {
+                    let index = self.read_byte();
+                    self.get_upvalue(index);
+                }
+                op::SET_UPVALUE => {
+                    todo!("Set upvalue")
+                }
+                op::CLOSURE => {
+                    let function = self.read_constant().as_pointer();
+                    let upvalues = self.read_byte() as usize;
 
-                    let new_value = peek_stack!(self);
-                    self.stack[index] = new_value.clone();
+                    let closure = Closure {
+                        function,
+                        upvalues: Vec::with_capacity(upvalues),
+                    };
+
+                    let ptr = self.memory.allocate(Object::Closure(Box::new(closure)));
+                    self.stack.push(Value::Object(ptr))
                 }
                 op::JUMP => {
                     let jump = self.read_jump();
@@ -401,7 +394,7 @@ impl VM {
                         Value::Nil => println!("nil"),
                         Value::Number(n) => println!("{}", n),
                         Value::Boolean(b) => println!("{}", b),
-                        Value::Object(ptr) => println!("{}", self.get_object(ptr)),
+                        Value::Object(ptr) => println!("{}", self.show_object(ptr)),
                     }
                 }
                 op::NIL => self.stack.push(Value::Nil),
@@ -433,7 +426,9 @@ impl VM {
                         return Ok(value);
                     }
 
-                    for _ in 0..=self.get_object(frame.closure).as_function().arity {
+                    let function = self.get_closure(frame.closure).function;
+                    let function = self.get_function(function);
+                    for _ in 0..=function.arity {
                         self.stack.pop();
                     }
 
@@ -527,44 +522,38 @@ impl VM {
 
                     self.stack.push(Value::Boolean(v1 || v2))
                 }
-                25_u8..=u8::MAX => panic!("Invalid bytecode {}", op),
+                28_u8..=u8::MAX => {
+                    let msg = format!("Invalid bytecode {}", op);
+                    self.fatal_error(&msg)
+                }
             }
         }
     }
 
-    pub fn current_closure(&mut self) -> &Function {
+    pub fn current_closure(&self) -> &Closure {
         let frame = get_frame!(self).closure;
-        self.get_object(frame).as_function()
+        self.get_closure(frame)
+    }
+
+    pub fn current_function(&self) -> &Function {
+        let function = self.current_closure().function;
+        self.get_function(function)
     }
 
     pub fn ip(&mut self) -> usize {
         get_frame!(self).ip
     }
 
-    pub fn line_number(&mut self) -> usize {
+    pub fn line_number(&self) -> usize {
         let frame = get_frame!(self).ip - 1;
-        let line = self
-            .current_closure()
-            .chunk
-            .lines
-            .get(frame);
-
-        match line {
-            Some(line) => *line,
-            None => {
-                self.runtime_error(MEMORY_ERROR);
-                panic!("{}", self.error_chain)
-            }
-        }
+        *self.current_function().chunk.lines.get(frame).unwrap()
     }
 
     fn byte(&mut self, ip: usize) -> u8 {
-        match self.current_closure().chunk.code.get(ip) {
+        match self.current_function().chunk.code.get(ip) {
             Some(byte) => *byte,
             None => {
-                self.runtime_error(MEMORY_ERROR);
-                self.print_errors();
-                panic!("{}", self.error_chain);
+                self.fatal_error(MEMORY_ERROR);
             }
         }
     }
@@ -581,14 +570,10 @@ impl VM {
 
     pub fn read_constant(&mut self) -> Value {
         let index = self.read_byte() as usize;
-        let constant = self.current_closure().chunk.constants.get(index);
+        let constant = self.current_function().chunk.constants.get(index);
         match constant {
-            Some(val) => val.clone(),
-            None => {
-                self.runtime_error(CONSTANT_ERROR);
-                self.print_errors();
-                panic!("{}", self.error_chain);
-            }
+            Some(val) => *val,
+            None => self.fatal_error(CONSTANT_ERROR),
         }
     }
 
@@ -599,27 +584,33 @@ impl VM {
         (high << 8) | low
     }
 
-    fn memory_error(&mut self) -> ! {
-        self.runtime_error(MEMORY_ERROR);
-        self.print_errors();
-        panic!("{}", self.error_chain)
+    fn fatal_error(&self, msg: &str) -> ! {
+        panic!("{}\nErrors: {}", msg, self.error_chain.show_all())
     }
 
-    pub fn get_object(&mut self, ptr: MemoryEntry) -> &Object {
+    pub fn get_object(&self, ptr: MemoryEntry) -> &Object {
         if self.memory.is_valid(ptr) {
             return self.memory.retrieve(&ptr).unwrap();
         }
-        self.memory_error()
+        self.fatal_error(MEMORY_ERROR)
     }
 
     pub fn get_object_mut(&mut self, ptr: MemoryEntry) -> &mut Object {
         if self.memory.is_valid(ptr) {
             return self.memory.retrieve_mut(&ptr).unwrap();
         }
-        self.memory_error()
+        self.fatal_error(MEMORY_ERROR)
     }
 
-    pub fn get_string(&mut self, ptr: MemoryEntry) -> &String {
+    pub(crate) fn show_object(&mut self, ptr: MemoryEntry) -> String {
+        let function = match self.get_object(ptr) {
+            Object::Closure(c) => c.function,
+            obj => return format!("{}", obj),
+        };
+        self.show_object(function)
+    }
+
+    pub fn get_string(&self, ptr: MemoryEntry) -> &String {
         get_object!(self, ptr, Object::String(_)).as_string()
     }
 
@@ -627,11 +618,19 @@ impl VM {
         get_object_mut!(self, ptr, Object::Function(_)).as_function_mut()
     }
 
-    pub fn get_function(&mut self, ptr: MemoryEntry) -> &Function {
+    pub fn get_function(&self, ptr: MemoryEntry) -> &Function {
         get_object!(self, ptr, Object::Function(_)).as_function()
     }
 
-    pub fn is_string(&mut self, value: &Value) -> bool {
+    pub fn get_closure_mut(&mut self, ptr: MemoryEntry) -> &mut Closure {
+        get_object_mut!(self, ptr, Object::Closure(_)).as_closure_mut()
+    }
+
+    pub fn get_closure(&self, ptr: MemoryEntry) -> &Closure {
+        get_object!(self, ptr, Object::Closure(_)).as_closure()
+    }
+
+    pub fn is_string(&self, value: &Value) -> bool {
         match value {
             Value::Object(ptr) => {
                 matches!(self.get_object(*ptr), Object::String(_))
@@ -651,6 +650,14 @@ impl VM {
         let base = get_frame!(self).slots;
         let offset = self.read_byte() as usize;
         base + offset - 1
+    }
+
+    fn get_upvalue(&mut self, index: u8) -> Value {
+        self.current_closure()
+            .upvalues
+            .get(index as usize)
+            .unwrap()
+            .value()
     }
 
     fn read_name(&mut self) -> String {
@@ -706,15 +713,16 @@ impl LoxErrorChain {
         !self.errors.is_empty()
     }
 
+    pub(crate) fn show_all(&self) -> String {
+        self.errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
     pub(crate) fn print_all(&self) {
-        println!(
-            "{}",
-            self.errors
-                .iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<String>>()
-                .join("\n")
-        )
+        println!("{}", self.show_all())
     }
 
     pub fn errors(&mut self) -> Vec<LoxError> {
@@ -758,7 +766,7 @@ mod test {
                 // todo: assert on the kind of failure
                 match VM::default().interpret($text) {
                     Err(_) => (),
-                    _ => panic!("Program did not cause compilation or runtime error.")
+                    _ => panic!("Program did not cause compilation or runtime error."),
                 }
             }
         };
@@ -778,7 +786,7 @@ mod test {
                 match VM::default().interpret($text) {
                     Ok(_) => (),
                     Err(vm) => {
-                        panic!("!!! Error interpreting statement\n{}", vm.error_chain)
+                        panic!("!!! Error interpreting statement: {}", vm.error_chain)
                     }
                 }
             }
@@ -1051,6 +1059,38 @@ mod test {
         }
 
         assert f()() == 1;
+        "
+    }
+
+    test_program! {
+        close_value,
+        "
+        var x = 1;
+        fun f() {
+            return x;
+        }
+
+        assert f() == 1;
+
+        x = 2;
+
+        assert f() == 2;
+        "
+    }
+
+    test_program! {
+        close_local_variables,
+        "
+        var g;
+        {
+            var x = 1;
+            fun f() {
+                return x;
+            }
+            g = f;
+        }
+
+        assert g() == 1;
         "
     }
 

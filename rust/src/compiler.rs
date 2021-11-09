@@ -27,8 +27,11 @@ pub struct Compiler<'a> {
     scanner: &'a mut Scanner,
     parser: &'a mut Parser,
 
+    parent: Option<usize>,
+
     function: MemoryEntry,
     locals: Vec<Local>,
+    upvalues: Vec<Upvalue>,
 
     scope_depth: isize,
 
@@ -40,6 +43,12 @@ pub struct Local {
     name: Token,
     depth: isize,
     is_captured: bool,
+}
+
+#[derive(Debug)]
+pub struct Upvalue {
+    index: u8,
+    is_local: bool,
 }
 
 /// The parser that does all the work creating the bytecode.
@@ -177,15 +186,19 @@ impl<'a> Compiler<'a> {
             function,
             scanner,
             parser,
+            parent: None,
             scope_depth: 0,
             locals: Vec::new(),
+            upvalues: Vec::new(),
             error_chain: LoxErrorChain::default(),
         }
     }
 
     pub fn spawn(&mut self, name: MemoryEntry) -> Compiler {
         let name = self.vm.get_string(name).clone();
-        let entry_point = Function {
+        let parent: *mut Compiler<'a> = self;
+        let parent: usize = parent as usize; // this is honestly kinda stupid
+        let function = Function {
             name,
             arity: 0,
             chunk: Chunk::default(),
@@ -194,14 +207,16 @@ impl<'a> Compiler<'a> {
         let function = self
             .vm
             .memory
-            .allocate(Object::Function(Box::new(entry_point)));
+            .allocate(Object::Function(Box::new(function)));
         Compiler {
+            function,
             vm: self.vm,
             scanner: self.scanner,
             parser: self.parser,
-            function,
+            parent: Some(parent),
             scope_depth: self.scope_depth + 1,
             locals: Vec::new(),
+            upvalues: Vec::new(),
             error_chain: LoxErrorChain::default(),
         }
     }
@@ -485,10 +500,12 @@ impl<'a> Compiler<'a> {
         compiler.consume(LeftBrace, "Expected '{' before function body.");
         compiler.block()?;
 
+        let upvalues = compiler.upvalues.len() as u8;
         let function = compiler.end_compiler()?;
 
         let function_constant = self.make_constant(Value::Object(function));
-        self.emit_bytes(op::CONSTANT, function_constant);
+        self.emit_byte(op::CLOSURE);
+        self.emit_bytes(function_constant, upvalues);
 
         Ok(function)
     }
@@ -963,12 +980,21 @@ impl<'a> Compiler<'a> {
     fn named_variable(&mut self, can_assign: bool) {
         // Local variable
         let arg: isize = self.resolve_local();
-        if arg > 0 && self.match_(TokenType::Equal) {
+        if arg != UNINITIALIZED && self.match_(TokenType::Equal) {
             // UNINITIALIZED (-1) is the only negative value
             self.expression();
             return self.emit_bytes(op::SET_LOCAL, arg as u8);
-        } else if arg > 0 {
+        } else if arg != UNINITIALIZED {
             return self.emit_bytes(op::GET_LOCAL, arg as u8);
+        }
+
+        // Upvalue
+        let arg = self.resolve_upvalue();
+        if arg != UNINITIALIZED && self.match_(TokenType::Equal) {
+            self.expression();
+            return self.emit_bytes(op::SET_UPVALUE, arg as u8);
+        } else if arg != UNINITIALIZED {
+            return self.emit_bytes(op::GET_UPVALUE, arg as u8);
         }
 
         // Global variable
@@ -990,6 +1016,49 @@ impl<'a> Compiler<'a> {
         }
 
         UNINITIALIZED
+    }
+
+    fn resolve_upvalue(&mut self) -> isize {
+        if self.parent.is_none() {
+            return UNINITIALIZED;
+        }
+        let parent = self.parent.unwrap();
+
+        unsafe {
+            let parent: *mut Compiler = parent as *mut Compiler;
+            let parent = parent.as_mut().unwrap();
+            let local = parent.resolve_local();
+            if local != UNINITIALIZED {
+                let local = local as usize;
+                parent.locals.get_mut(local).unwrap().is_captured = true;
+                return self.add_upvalue(local, true) as isize;
+            }
+
+            let upvalue = parent.resolve_upvalue();
+            if upvalue != UNINITIALIZED {
+                let upvalue = upvalue as usize;
+                return self.add_upvalue(upvalue, false) as isize;
+            }
+        }
+
+        UNINITIALIZED
+    }
+
+    fn add_upvalue(&mut self, index: usize, is_local: bool) -> u8 {
+        for (i, upvalue) in self.upvalues.iter().enumerate() {
+            if upvalue.index == index as u8 && upvalue.is_local == is_local {
+                return i as u8;
+            }
+        }
+
+        if self.upvalues.len() == u8::MAX as usize {
+            self.error("Too many closures in function.");
+            return 0;
+        }
+
+        let index = index as u8;
+        self.upvalues.push(Upvalue { is_local, index });
+        (self.upvalues.len() - 1) as u8
     }
 }
 
@@ -1113,20 +1182,24 @@ mod test {
         ($name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
+                unsafe {
+                    crate::debug::DEBUG_PRINT_CODE = true;
+                    crate::debug::DEBUG_TRACE_EXECUTION = true;
+                }
                 let mut scanner = Scanner::default();
                 let mut parser = Parser::default();
                 let mut vm = VM::default();
                 let compiler = Compiler::new(&mut scanner, &mut parser, &mut vm);
 
                 println!("Compiling program:\n{}", $text);
-                let mut vm = match compiler.compile($text) {
+                let vm = match compiler.compile($text) {
                     Ok(_) => vm,
                     Err(e) => {
                         println!("Error in test: {}", e);
                         panic!("Failing test: expected code to compile.")
                     }
                 };
-                let bytecode = vm.get_function(crate::object::mem(0));
+                let bytecode = &vm.get_function(crate::object::mem(0));
 
                 assert_eq!(bytecode.chunk.code, $test_case)
             }
@@ -1137,6 +1210,10 @@ mod test {
         ($errors:ident, $name:ident, $text:literal, $test_case:expr) => {
             #[test]
             fn $name() {
+                unsafe {
+                    crate::debug::DEBUG_PRINT_CODE = true;
+                    crate::debug::DEBUG_TRACE_EXECUTION = true;
+                }
                 let mut vm = VM::default();
                 let mut scanner = Scanner::default();
                 let mut parser = Parser::default();
@@ -1160,7 +1237,7 @@ mod test {
         let fun = compiler.compile("var x;").unwrap();
 
         let ptr = {
-            let bytecode = vm.get_function(fun);
+            let bytecode = &vm.get_function(fun);
             assert_eq!(1, bytecode.chunk.constants.len());
             if let Value::Object(ptr) = bytecode.chunk.constants.get(0).unwrap() {
                 *ptr
@@ -1437,8 +1514,9 @@ mod test {
         }
         ",
         vec![
-            op::CONSTANT,
+            op::CLOSURE,
             1,
+            0,
             op::DEFINE_GLOBAL,
             0,
             op::NIL,
@@ -1456,7 +1534,8 @@ mod test {
         }
         ",
         vec![
-            op::CONSTANT,
+            op::CLOSURE,
+            0,
             0,
             op::POP,
             op::NIL,
@@ -1472,8 +1551,9 @@ mod test {
         }
         ",
         vec! [
-            op::CONSTANT,
+            op::CLOSURE,
             1,
+            0,
             op::DEFINE_GLOBAL,
             0,
             op::NIL,
@@ -1491,8 +1571,9 @@ mod test {
         f(1, 2);
         ",
         vec! [
-            op::CONSTANT,
+            op::CLOSURE,
             1,
+            0,
             op::DEFINE_GLOBAL,
             0,
             op::GET_GLOBAL,
@@ -1503,6 +1584,29 @@ mod test {
             3,
             op::CALL,
             2,
+            op::POP,
+            op::NIL,
+            op::RETURN
+        ]
+    }
+
+    test_program! {
+        define_closure,
+        "
+        {
+            var x = 10;
+            fun f() {
+                return x;
+            }
+        }
+        ",
+        vec![
+            op::CONSTANT,
+            0,
+            op::CLOSURE,
+            1,
+            1,
+            op::POP,
             op::POP,
             op::NIL,
             op::RETURN

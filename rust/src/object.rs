@@ -1,6 +1,6 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, pin::Pin};
 
-use crate::compiler::Function;
+use crate::{compiler::Function, value::Value};
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct MemoryEntry {
@@ -19,12 +19,24 @@ impl Eq for MemoryEntry {}
 pub enum Object {
     _BoundMethod(),
     _Class(),
-    _Closure(),
+    Closure(Box<Closure>),
     Function(Box<Function>),
     _Instance(),
     _Native(),
     String(Box<String>),
-    _Upvalue(),
+    Upvalue(Box<Upvalue>),
+}
+
+#[derive(Debug)]
+pub struct Upvalue {
+    value: Option<Pin<Value>>,
+    location: *const Value,
+}
+
+#[derive(Debug)]
+pub struct Closure {
+    pub(crate) function: MemoryEntry,
+    pub(crate) upvalues: Vec<Upvalue>,
 }
 
 #[derive(Debug)]
@@ -97,12 +109,12 @@ impl Display for Object {
         match self {
             Object::_BoundMethod() => todo!("display a bound method"),
             Object::_Class() => todo!("display a class"),
-            Object::_Closure() => todo!("display a closure"),
             Object::Function(func) => write!(f, "fn<{}>", func.name),
             Object::_Instance() => todo!("display an instance"),
             Object::_Native() => todo!("display a native function"),
             Object::String(s) => write!(f, "\"{}\"", s),
-            Object::_Upvalue() => todo!("display an upvalue"),
+            Object::Upvalue(u) => write!(f, "{}", u.value()),
+            Object::Closure(_) => panic!("(Internal) cannot display closure object"),
         }
     }
 }
@@ -114,10 +126,25 @@ impl Object {
             _ => panic!("Internal error: expected lox function type (this is a compiler bug)."),
         }
     }
+
     pub fn as_function(&self) -> &Function {
         match self {
             Object::Function(f) => f,
             _ => panic!("Internal error: expected lox function type (this is a compiler bug)."),
+        }
+    }
+
+    pub fn as_closure_mut(&mut self) -> &mut Closure {
+        match self {
+            Object::Closure(c) => c,
+            _ => panic!("Internal error: expected lox closure type (this is a compiler bug)."),
+        }
+    }
+
+    pub fn as_closure(&self) -> &Closure {
+        match self {
+            Object::Closure(c) => c,
+            _ => panic!("Internal error: expected lox closure type (this is a compiler bug)."),
         }
     }
 
@@ -126,5 +153,11 @@ impl Object {
             Object::String(s) => s.as_ref(),
             _ => panic!("Internal error: expected lox string type (this is a compiler bug)."),
         }
+    }
+}
+
+impl Upvalue {
+    pub fn value(&self) -> Value {
+        unsafe { *self.location }
     }
 }

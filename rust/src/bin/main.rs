@@ -62,8 +62,8 @@ impl Lox {
                 Ok((vm, value)) => {
                     println!("{}", value);
                     vm
-                },
-                Err(mut vm) => {
+                }
+                Err(vm) => {
                     vm.print_errors();
                     vm
                 }
@@ -84,7 +84,7 @@ impl Lox {
 
         file.read_to_string(&mut contents)?;
 
-        if let Err(mut vm) = self.vm.interpret(contents.as_str()) {
+        if let Err(vm) = self.vm.interpret(contents.as_str()) {
             vm.print_errors();
         }
 
@@ -117,7 +117,7 @@ mod test {
 
                 match VM::default().interpret(contents.as_str()) {
                     Ok(_) => (),
-                    Err(mut vm) => {
+                    Err(vm) => {
                         println!("Failing test because of error");
                         vm.print_errors();
                         panic!()

@@ -20,7 +20,7 @@ pub trait DebugTrace {
 }
 
 trait DisassembleInstruction {
-    fn bytecode_name(&self) -> String;
+    fn bytecode_name(&self) -> &str;
 }
 
 impl Disassembler for Function {
@@ -49,12 +49,14 @@ impl Disassembler for Function {
                 AND => Self::print_instruction,
                 ASSERT => Self::print_instruction,
                 CALL => Self::print_local,
+                CLOSURE => Self::print_closure,
                 CONSTANT => Self::print_constant,
                 DEFINE_GLOBAL => Self::print_constant,
                 DIVIDE => Self::print_instruction,
                 EQUAL => Self::print_instruction,
                 GET_GLOBAL => Self::print_constant,
                 GET_LOCAL => Self::print_local,
+                GET_UPVALUE => Self::print_local,
                 GREATER => Self::print_instruction,
                 GREATER_EQUAL => Self::print_instruction,
                 JUMP => Self::print_jump,
@@ -70,8 +72,9 @@ impl Disassembler for Function {
                 RETURN => Self::print_instruction,
                 SET_GLOBAL => Self::print_constant,
                 SET_LOCAL => Self::print_local,
+                SET_UPVALUE => Self::print_local,
                 SUBTRACT => Self::print_instruction,
-                26_u8..=u8::MAX => panic!("Invalid opcode."),
+                29_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op.bytecode_name());
@@ -98,12 +101,14 @@ impl GraphAssembly for Function {
                 AND => Self::graph_instruction,
                 ASSERT => Self::graph_instruction,
                 CALL => Self::graph_local,
+                CLOSURE => Self::graph_closure,
                 CONSTANT => Self::graph_constant,
                 DEFINE_GLOBAL => Self::graph_constant,
                 DIVIDE => Self::graph_instruction,
                 EQUAL => Self::graph_instruction,
                 GET_GLOBAL => Self::graph_constant,
                 GET_LOCAL => Self::graph_local,
+                GET_UPVALUE => Self::graph_local,
                 GREATER => Self::graph_instruction,
                 GREATER_EQUAL => Self::graph_instruction,
                 JUMP => Self::graph_jump,
@@ -119,8 +124,9 @@ impl GraphAssembly for Function {
                 RETURN => Self::graph_instruction,
                 SET_GLOBAL => Self::graph_constant,
                 SET_LOCAL => Self::graph_local,
+                SET_UPVALUE => Self::graph_local,
                 SUBTRACT => Self::graph_instruction,
-                26_u8..=u8::MAX => panic!("Invalid opcode."),
+                29_u8..=u8::MAX => panic!("Invalid opcode."),
             };
 
             i = action(self, i, op);
@@ -141,7 +147,7 @@ impl DebugTrace for VM {
         let ip = self.ip();
         let line_part = self.get_line_part(ip);
 
-        let op = *self.current_closure().chunk.code.get(ip).unwrap();
+        let op = *self.current_function().chunk.code.get(ip).unwrap();
         let op = op.bytecode_name();
 
         // todo: this is expensive and happens on every instruction, is there a way to avoid?
@@ -149,7 +155,7 @@ impl DebugTrace for VM {
 
         let show_val = |v: &Value| -> String {
             match v {
-                Value::Object(ptr) => format!("{}", self.get_object(*ptr)),
+                Value::Object(ptr) => self.show_object(*ptr),
                 _ => format!("{}", v),
             }
         };
@@ -171,8 +177,8 @@ impl DebugTrace for VM {
 
         eprintln!(
             "----- execute::{} -----",
-            if !self.current_closure().name.is_empty() {
-                &self.current_closure().name
+            if !self.current_function().name.is_empty() {
+                &self.current_function().name
             } else {
                 "<script>"
             }
@@ -189,9 +195,12 @@ impl Function {
         )
     }
 
+    fn graph_closure(&self, i: usize, op: u8) -> usize {
+        todo!("graph closure instruction with arrow to chunk {} {}", i, op)
+    }
+
     fn graph_local(&self, i: usize, op: u8) -> usize {
         let c = *self.chunk.code.get(i + 1).unwrap();
-        let c = self.chunk.constants.get(c as usize).unwrap();
         let next = self.chunk.code.get(i + 2).unwrap();
 
         eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
@@ -202,13 +211,13 @@ impl Function {
 
     fn graph_constant(&self, i: usize, op: u8) -> usize {
         // todo: graph the constant itself, not the pointer
-        let c = self.chunk.code.get(i + 1).unwrap();
-        let next = self.chunk.code.get(i + 2).unwrap();
+        let c = *self.chunk.code.get(i + 1).unwrap();
+        let next = *self.chunk.code.get(i + 2).unwrap();
 
-        let c = self.chunk.constants.get(*c as usize).unwrap();
+        let c = self.chunk.constants.get(c as usize).unwrap();
 
-        eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
-        eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
+        eprintln!("\"{}: {}\" -> \"{}: {}\";", i, op, i + 1, c);
+        eprintln!("\"{}: {}\" -> \"{}: {}\";", i, op, i + 2, next);
 
         i + 2
     }
@@ -220,7 +229,7 @@ impl Function {
         i + 1
     }
 
-    fn print_jump(&self, i: usize, op: String) -> usize {
+    fn print_jump(&self, i: usize, op: &str) -> usize {
         let byte1 = *self.chunk.code.get(i + 1).unwrap();
         let byte2 = *self.chunk.code.get(i + 2).unwrap();
         let jump = Self::read_jump(byte1, byte2);
@@ -231,7 +240,20 @@ impl Function {
         i + 3
     }
 
-    fn print_local(&self, i: usize, op: String) -> usize {
+    fn print_closure(&self, i: usize, op: &str) -> usize {
+        let function = self.chunk.code.get(i + 1).unwrap();
+        let upval_count = self.chunk.code.get(i + 1).unwrap();
+        let line_part = self.get_line_part(i);
+
+        eprintln!(
+            "{:04} {}{:16}{:10}, {}",
+            i, line_part, op, function, upval_count
+        );
+
+        i + 3
+    }
+
+    fn print_local(&self, i: usize, op: &str) -> usize {
         // todo: graph the values instead of the pointer
         let val = self.chunk.code.get(i + 1).unwrap();
         let line_part = self.get_line_part(i);
@@ -240,7 +262,7 @@ impl Function {
         i + 2
     }
 
-    fn print_constant(&self, i: usize, op: String) -> usize {
+    fn print_constant(&self, i: usize, op: &str) -> usize {
         // todo: graph the values instead of the pointer
         let val = self.chunk.code.get(i + 1).unwrap();
         let line_part = self.get_line_part(i);
@@ -256,7 +278,7 @@ impl Function {
         i + 2
     }
 
-    fn print_instruction(&self, i: usize, op: String) -> usize {
+    fn print_instruction(&self, i: usize, op: &str) -> usize {
         let line_part = self.get_line_part(i);
         eprintln!("{:04} {}{}", i, line_part, op);
         i + 1
@@ -290,8 +312,8 @@ impl VM {
             return format!("{:<4}", "|");
         }
 
-        let line = *self.current_closure().chunk.lines.get(i - 1).unwrap();
-        let this_line = *self.current_closure().chunk.lines.get(i).unwrap();
+        let line = *self.current_function().chunk.lines.get(i - 1).unwrap();
+        let this_line = *self.current_function().chunk.lines.get(i).unwrap();
         if this_line > line {
             format!("{:<4}", this_line)
         } else {
@@ -301,35 +323,38 @@ impl VM {
 }
 
 impl DisassembleInstruction for u8 {
-    fn bytecode_name(&self) -> String {
+    fn bytecode_name(&self) -> &str {
         match *self {
-            ADD => String::from("OP_ADD"),
-            AND => String::from("OP_AND"),
-            ASSERT => String::from("OP_ASSERT"),
-            CALL => String::from("OP_CALL"),
-            CONSTANT => String::from("OP_CONSTANT"),
-            DEFINE_GLOBAL => String::from("OP_DEFINE_GLOBAL"),
-            DIVIDE => String::from("OP_DIVIDE"),
-            EQUAL => String::from("OP_EQUAL"),
-            GET_GLOBAL => String::from("OP_GET_GLOBAL"),
-            GET_LOCAL => String::from("OP_GET_LOCAL"),
-            GREATER => String::from("OP_GREATER"),
-            GREATER_EQUAL => String::from("OP_GREATER_EQUAL"),
-            JUMP => String::from("OP_JUMP"),
-            JUMP_IF_FALSE => String::from("OP_JUMP_IF_FALSE"),
-            LOOP => String::from("OP_LOOP"),
-            MULTIPLY => String::from("OP_MULTIPLY"),
-            NEGATE => String::from("OP_NEGATE"),
-            NIL => String::from("OP_NIL"),
-            NOT => String::from("OP_NOT"),
-            OR => String::from("OP_OR"),
-            POP => String::from("OP_POP"),
-            PRINT => String::from("OP_PRINT"),
-            RETURN => String::from("OP_RETURN"),
-            SET_GLOBAL => String::from("OP_SET_GLOBAL"),
-            SET_LOCAL => String::from("OP_SET_LOCAL"),
-            SUBTRACT => String::from("OP_SUBTRACT"),
-            26_u8..=u8::MAX => panic!("Invalid Opcode."),
+            ADD => "OP_ADD",
+            AND => "OP_AND",
+            ASSERT => "OP_ASSERT",
+            CALL => "OP_CALL",
+            CLOSURE => "OP_CLOSURE",
+            CONSTANT => "OP_CONSTANT",
+            DEFINE_GLOBAL => "OP_DEFINE_GLOBAL",
+            DIVIDE => "OP_DIVIDE",
+            EQUAL => "OP_EQUAL",
+            GET_GLOBAL => "OP_GET_GLOBAL",
+            GET_LOCAL => "OP_GET_LOCAL",
+            GET_UPVALUE => "OP_GET_UPVALUE",
+            GREATER => "OP_GREATER",
+            GREATER_EQUAL => "OP_GREATER_EQUAL",
+            JUMP => "OP_JUMP",
+            JUMP_IF_FALSE => "OP_JUMP_IF_FALSE",
+            LOOP => "OP_LOOP",
+            MULTIPLY => "OP_MULTIPLY",
+            NEGATE => "OP_NEGATE",
+            NIL => "OP_NIL",
+            NOT => "OP_NOT",
+            OR => "OP_OR",
+            POP => "OP_POP",
+            PRINT => "OP_PRINT",
+            RETURN => "OP_RETURN",
+            SET_GLOBAL => "OP_SET_GLOBAL",
+            SET_LOCAL => "OP_SET_LOCAL",
+            SET_UPVALUE => "OP_SET_UPVALUE",
+            SUBTRACT => "OP_SUBTRACT",
+            29_u8..=u8::MAX => panic!("Invalid Opcode."),
         }
     }
 }
