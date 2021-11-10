@@ -313,6 +313,7 @@ impl VM {
 
                     match val {
                         Value::Boolean(false) | Value::Nil => {
+                            self.runtime_error(&format!("Value was {}", val));
                             self.fatal_error("Assertion Failed!!!");
                         }
                         _ => (),
@@ -358,13 +359,14 @@ impl VM {
                     self.stack[index + 1] = *peek_stack!(self);
                 }
                 op::GET_UPVALUE => {
-                    let index = self.read_byte();
-                    let upvalue = self.current_closure().upvalues.get(index as usize).unwrap();
-                    let value = self.get_upvalue(*upvalue).value(self);
+                    let upvalue = self.read_upvalue();
+                    let value = self.get_upvalue(upvalue).value(self);
                     self.stack.push(value);
                 }
                 op::SET_UPVALUE => {
-                    todo!("Set upvalue")
+                    let value = pop_stack!(self);
+                    let upvalue = self.read_upvalue();
+                    self.set_upvalue(upvalue, value);
                 }
                 op::CLOSURE => {
                     let function = self.read_constant().as_pointer();
@@ -615,6 +617,14 @@ impl VM {
         (high << 8) | low
     }
 
+    fn read_upvalue(&mut self) -> MemoryEntry {
+        let index = self.read_byte();
+        match self.current_closure().upvalues.get(index as usize) {
+            None => self.fatal_error(STACK_UNDERFLOW),
+            Some(mem) => *mem,
+        }
+    }
+
     fn fatal_error(&self, msg: &str) -> ! {
         panic!("{}\nErrors: {}", msg, self.error_chain.show_all())
     }
@@ -678,6 +688,20 @@ impl VM {
         }
     }
 
+    fn set_upvalue(&mut self, mut upvalue: MemoryEntry, value: Value) {
+        while !self.get_upvalue(upvalue).is_root() {
+            upvalue = self.get_upvalue(upvalue).get_parent();
+        }
+
+        if self.get_upvalue(upvalue).is_local() {
+            let local = self.get_upvalue(upvalue).get_local();
+            self.stack[local] = value;
+            return;
+        }
+
+        self.get_upvalue_mut(upvalue).close(value);
+    }
+
     pub fn concatenate(&mut self, v1: MemoryEntry, v2: MemoryEntry) -> Value {
         let mut result = self.get_object(v1).as_string().clone();
         result.push_str(self.get_object(v2).as_string());
@@ -694,6 +718,11 @@ impl VM {
     fn allocate_upvalue(&mut self, is_local: bool, index: usize) -> MemoryEntry {
         let upvalue = if is_local {
             let base = get_frame!(self).slots;
+            // Base points to the function of the closure that was called. The upvalue
+            // will never be that function because if it was it would be alocal in the
+            // calling scope or a global. What we mean by `index` here is the index of
+            // the local variable, which we dereference as `index + 1`, if you look
+            // at op::GET_LOCAL
             Upvalue::from_local(base + index + 1)
         } else {
             let upvalues = &self.current_closure().upvalues;
@@ -703,10 +732,31 @@ impl VM {
 
         let ptr = self.memory.allocate(Object::Upvalue(Box::new(upvalue)));
 
+        // It's possible to create an upvalue that points to a parent upvalue that
+        // has already gone out of scope. This happens when a closure is created
+        // by another closure, whose upvalues are out of scope. For example:
+        //
+        // ```lox
+        // var h;
+        // {
+        //     var x = 1;
+        //     fun f() {
+        //         // Closure will be created when `f` is called.
+        //         fun g() {
+        //             return x;
+        //         }
+        //         return g;
+        //     }
+        //     h = f;
+        // }
+        // h();
+        // ```
         if upvalue.is_closed(self) {
             return ptr;
         }
 
+        // todo: is there a more efficient way to do this than copying the whole
+        // array without causing borrow checker errors?
         self.open_upvalues.push(ptr);
         let mut ou = self.open_upvalues.clone();
         ou.sort_by(|u, v| {
@@ -732,6 +782,9 @@ impl VM {
         }
 
         loop {
+            // This loop could potentially close all open upvalues, for example if
+            // it is called after the only or last closure's variables go out of
+            // scope, or the next closure hasn't been created yet.
             if self.open_upvalues.is_empty() {
                 break;
             }
@@ -1190,6 +1243,27 @@ mod test {
         
             assert 3 == f();
         }
+        "
+    }
+
+    test_program! {
+        counter,
+        "
+        fun counter() {
+            var x = 0;
+            fun c() {
+                x = x + 1;
+                return x;
+            }
+            return c;
+        }
+
+        var t = counter();
+        var r = counter();
+
+        assert 1 == t();
+        assert 2 == t();
+        assert 1 == r();
         "
     }
 
