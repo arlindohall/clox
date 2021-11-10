@@ -135,4 +135,5 @@ mod test {
     test_script! { run_file_print, "print" }
     test_script! { run_file_simple, "simple" }
     test_script! { run_file_if_and_while, "if-and-while" }
+    test_script! { run_file_crazy_closure, "crazy-closure" }
 }

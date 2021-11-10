@@ -1,0 +1,34 @@
+var x = 1;
+var k;
+{
+    var y = 2;
+    fun f() {
+        var z = 3;
+        fun g() {
+            var a = 4;
+            fun l() {
+                return x;
+            }
+            fun m() {
+                return l() + y;
+            }
+            fun n() {
+                return m() + z;
+            }
+            fun o() {
+                return n() + a;
+            }
+            fun h() {
+                var b = 5;
+                return o() + b;
+            }
+            return h;
+        }
+        return g();
+    }
+
+    var i = f();
+    assert 15 == i();
+    k = i;
+}
+assert 15 == k();

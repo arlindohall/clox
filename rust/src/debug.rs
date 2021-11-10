@@ -251,12 +251,14 @@ impl Function {
         let upval_count = *self.chunk.code.get(i + 2).unwrap() as usize;
         i += 3;
 
-        eprintln!("{:04} {}{:16}{:10}, {}:", i, line_part, op, function, upval_count);
+        eprintln!(
+            "{:04} {}{:16}{:10}, {}:",
+            i, line_part, op, function, upval_count
+        );
 
         for upv in 0..upval_count {
             eprintln!(
-                "{}(is_local={}, index={}) ",
-                "           UPVALUE",
+                "           UPVALUE(is_local={}, index={}) ",
                 *self.chunk.code.get(i + (2 * upv)).unwrap() != 0,
                 self.chunk.code.get(i + (2 * upv) + 1).unwrap()
             )

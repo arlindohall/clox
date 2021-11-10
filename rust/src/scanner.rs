@@ -274,11 +274,16 @@ impl Scanner {
     ///
     /// If the token isn't matched, then return `Identifier` because this is just
     /// a variable class or method name.
-    fn check_keyword(&self, start: usize, matches: &str, type_: TokenType) -> TokenType {
-        for (idx, ch) in matches.chars().enumerate() {
-            if ch != self.peek_nth(self.start + start + idx) {
+    fn check_keyword(&self, mut start: usize, matches: &str, type_: TokenType) -> TokenType {
+        if self.current - self.start != start + matches.len() {
+            return Identifier;
+        }
+
+        for ch in matches.chars() {
+            if ch != self.peek_nth(self.start + start) {
                 return Identifier;
             }
+            start += 1;
         }
 
         type_

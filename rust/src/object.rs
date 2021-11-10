@@ -30,14 +30,13 @@ pub enum Object {
 #[derive(Debug, Clone)]
 pub struct Upvalue {
     value: UpvalueWrapper,
-    pub closure: (MemoryEntry, usize),
 }
 
 #[derive(Debug, Clone)]
 enum UpvalueWrapper {
     Value(Value),
     StackPointer(usize),
-    UpvaluePointer(usize),
+    UpvaluePointer(MemoryEntry),
 }
 
 impl Copy for Upvalue {}
@@ -46,7 +45,8 @@ impl Copy for UpvalueWrapper {}
 #[derive(Debug)]
 pub struct Closure {
     pub(crate) function: MemoryEntry,
-    pub(crate) upvalues: Vec<Upvalue>,
+    pub(crate) upvalues: Vec<MemoryEntry>,
+    pub(crate) enclosing: Option<MemoryEntry>,
 }
 
 #[derive(Debug)]
@@ -160,48 +160,81 @@ impl Object {
 
     pub(crate) fn as_string(&self) -> &String {
         match self {
-            Object::String(s) => s.as_ref(),
+            Object::String(s) => s,
             _ => panic!("Internal error: expected lox string type (this is a compiler bug)."),
+        }
+    }
+
+    pub(crate) fn as_upvalue(&self) -> &Upvalue {
+        match self {
+            Object::Upvalue(u) => u,
+            _ => {
+                panic!("Internal error: expected lox closed stack value (this is a compiler bug).")
+            }
+        }
+    }
+
+    pub(crate) fn as_upvalue_mut(&mut self) -> &mut Upvalue {
+        match self {
+            Object::Upvalue(u) => u,
+            _ => {
+                panic!("Internal error: expected lox closed stack value (this is a compiler bug).")
+            }
         }
     }
 }
 
 impl Upvalue {
-
     pub fn from_local(local: usize) -> Upvalue {
         Upvalue {
             value: UpvalueWrapper::StackPointer(local),
-            closure: (mem(0), 0),
         }
     }
 
-    pub fn from_closed(upvalue: usize) -> Upvalue {
+    pub fn from_enclosing(upvalue: MemoryEntry) -> Upvalue {
         Upvalue {
             value: UpvalueWrapper::UpvaluePointer(upvalue),
-            closure: (mem(0), 0),
         }
     }
 
-    pub fn should_close(&self, current_stack: usize, vm: &VM) -> bool {
+    pub fn is_closed(&self, vm: &VM) -> bool {
         match self.value {
-            UpvalueWrapper::StackPointer(p) => p <= current_stack,
-            UpvalueWrapper::UpvaluePointer(v) => vm.get_upvalue(v as u8).should_close(current_stack, vm),
-            UpvalueWrapper::Value(_) => panic!("(Internal) value already closed is still open in VM."),
+            UpvalueWrapper::StackPointer(_) => false,
+            UpvalueWrapper::Value(_) => true,
+            UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).is_closed(vm),
         }
     }
 
     pub fn close(&mut self, value: Value) {
-        std::mem::swap(self, &mut Upvalue {
-            value: UpvalueWrapper::Value(value),
-            closure: self.closure,
-        });
+        std::mem::swap(
+            self,
+            &mut Upvalue {
+                value: UpvalueWrapper::Value(value),
+            },
+        );
     }
 
     pub fn value(&self, vm: &VM) -> Value {
         match self.value {
             UpvalueWrapper::Value(v) => v,
-            UpvalueWrapper::StackPointer(p) => *vm.stack.get(p).unwrap(),
-            UpvalueWrapper::UpvaluePointer(p) => vm.get_upvalue(p as u8).value(vm),
+            UpvalueWrapper::StackPointer(s) => *vm.stack.get(s).unwrap(),
+            UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).value(vm),
+        }
+    }
+
+    pub fn stack_index(&self, vm: &VM) -> usize {
+        match self.value {
+            UpvalueWrapper::StackPointer(s) => s,
+            UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).stack_index(vm),
+            UpvalueWrapper::Value(_) => panic!(),
+        }
+    }
+
+    pub fn is_after(&self, stack_top: usize, vm: &VM) -> bool {
+        match self.value {
+            UpvalueWrapper::Value(_) => true,
+            UpvalueWrapper::StackPointer(s) => s >= stack_top,
+            UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).is_after(stack_top, vm),
         }
     }
 }

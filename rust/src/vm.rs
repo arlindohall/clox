@@ -47,7 +47,7 @@ pub struct VM {
 
     /// Frames are public so the `debug` module can use them
     frames: Vec<CallFrame>,
-    open_upvalues: Vec<Upvalue>,
+    open_upvalues: Vec<MemoryEntry>,
 
     error_chain: LoxErrorChain,
 }
@@ -245,17 +245,20 @@ impl VM {
         // compiler can swap itself out for a child compiler
         let function = match compiler.compile(statement) {
             Ok(func) => func,
-            Err(_) => {
+            Err(mut error_chain) => {
+                for error in error_chain.errors() {
+                    self.error_chain.register(error);
+                }
                 return Err(self);
             }
         };
 
         self.stack.push(Value::Object(function));
         let function = self.memory.allocate(Object::Closure(Box::new(Closure {
+            enclosing: None,
             upvalues: Vec::new(),
             function,
         })));
-        self.stack.pop();
 
         self.call(function, 0, 0);
         match self.run() {
@@ -325,7 +328,7 @@ impl VM {
                 }
                 op::GET_GLOBAL => {
                     let name = &self.read_name();
-                    let global = match self.globals.get(name).map(|v| *v) {
+                    let global = match self.globals.get(name).copied() {
                         Some(mem) => mem,
                         None => {
                             self.runtime_error(GLOBAL_ERROR);
@@ -345,15 +348,19 @@ impl VM {
                 op::GET_LOCAL => {
                     let index = self.get_local();
 
-                    self.stack.push(*get_stack!(self, index))
+                    // Increment the local by one so we have to reference the call frame
+                    // one lower. The benefit is we can have a full 256 values on the
+                    // stack as local variables.
+                    self.stack.push(*get_stack!(self, index + 1))
                 }
                 op::SET_LOCAL => {
                     let index = self.get_local();
-                    self.stack[index] = *peek_stack!(self);
+                    self.stack[index + 1] = *peek_stack!(self);
                 }
                 op::GET_UPVALUE => {
                     let index = self.read_byte();
-                    let value = self.get_upvalue(index).value(&self);
+                    let upvalue = self.current_closure().upvalues.get(index as usize).unwrap();
+                    let value = self.get_upvalue(*upvalue).value(self);
                     self.stack.push(value);
                 }
                 op::SET_UPVALUE => {
@@ -362,52 +369,26 @@ impl VM {
                 op::CLOSURE => {
                     let function = self.read_constant().as_pointer();
                     let upvalue_count = self.read_byte() as usize;
-                    
+
                     let mut upvalues = Vec::new();
 
                     for _ in 0..upvalue_count {
                         let is_local = self.read_byte() != 0;
                         let index = self.read_byte() as usize;
 
-                        let upvalue = self.find_upvalue(is_local, index);
+                        let upvalue = self.allocate_upvalue(is_local, index);
                         upvalues.push(upvalue);
                     }
 
                     let closure = Closure {
+                        enclosing: Some(get_frame!(self).closure),
                         function,
                         upvalues,
                     };
 
                     let ptr = self.memory.allocate(Object::Closure(Box::new(closure)));
 
-                    for (i, upvalue) in &mut self.get_closure_mut(ptr).upvalues.iter_mut().enumerate() {
-                        upvalue.closure = (ptr, i);
-                    }
-                    for upvalue in self.get_closure(ptr).upvalues.clone() {
-                        self.open_upvalues.push(upvalue);
-                    }
-
                     self.stack.push(Value::Object(ptr))
-                }
-                op::CLOSE_UPVALUE => {
-                    dbg!(&self.open_upvalues);
-                    loop {
-                        if self.open_upvalues.is_empty() {
-                            break;
-                        }
-                        let upvalue = *self.open_upvalues.last().unwrap();
-                        let value = upvalue.value(&self);
-                        if upvalue.should_close(self.stack.len(), &self) {
-                            self.open_upvalues.pop();
-                            let (closure, index) = upvalue.closure;
-                            self.get_closure_mut(closure)
-                                .upvalues[index]
-                                .close(value);
-                            continue;
-                        }
-                        break;
-                    }
-                    self.stack.pop();
                 }
                 op::JUMP => {
                     let jump = self.read_jump();
@@ -457,25 +438,27 @@ impl VM {
                     let argc = self.read_byte();
                     let frame = self.stack.len() - (argc as usize) - 1;
                     let closure = get_stack!(self, frame).as_pointer();
-                    self.call(closure, argc as usize, frame + 1);
+                    self.call(closure, argc as usize, frame);
                 }
                 op::RETURN => {
-
                     let value = pop_stack!(self);
                     let frame = pop_frame!(self);
 
                     if self.frames.is_empty() {
                         return Ok(value);
                     }
-
                     self.debug_trace_function(get_frame!(self).closure);
-                    let function = self.get_closure(frame.closure).function;
-                    let function = self.get_function(function);
-                    for _ in 0..=function.arity {
+
+                    self.close_upvalues(frame.slots);
+                    while self.stack.len() > frame.slots {
                         self.stack.pop();
                     }
 
                     self.stack.push(value);
+                }
+                op::CLOSE_UPVALUE => {
+                    self.close_upvalues(self.stack.len() - 1);
+                    self.stack.pop();
                 }
                 op::ADD => {
                     // Reverse order of arguments a and b to match lexical order
@@ -678,6 +661,14 @@ impl VM {
         get_object!(self, ptr, Object::Closure(_)).as_closure()
     }
 
+    pub(crate) fn get_upvalue(&self, ptr: MemoryEntry) -> &Upvalue {
+        get_object!(self, ptr, Object::Upvalue(_)).as_upvalue()
+    }
+
+    fn get_upvalue_mut(&mut self, ptr: MemoryEntry) -> &mut Upvalue {
+        get_object_mut!(self, ptr, Object::Upvalue(_)).as_upvalue_mut()
+    }
+
     pub fn is_string(&self, value: &Value) -> bool {
         match value {
             Value::Object(ptr) => {
@@ -700,25 +691,62 @@ impl VM {
         base + offset
     }
 
-    pub(crate) fn get_upvalue(&self, index: u8) -> &Upvalue {
-        self.current_closure()
-            .upvalues
-            .get(index as usize)
-            .unwrap()
-    }
-
-    fn find_upvalue(&self, is_local: bool, index: usize) -> Upvalue {
-        if is_local {
+    fn allocate_upvalue(&mut self, is_local: bool, index: usize) -> MemoryEntry {
+        let upvalue = if is_local {
             let base = get_frame!(self).slots;
-            return Upvalue::from_local(base + index);
+            Upvalue::from_local(base + index + 1)
+        } else {
+            let upvalues = &self.current_closure().upvalues;
+            let upvalue = *upvalues.get(index).unwrap();
+            Upvalue::from_enclosing(upvalue)
+        };
+
+        let ptr = self.memory.allocate(Object::Upvalue(Box::new(upvalue)));
+
+        if upvalue.is_closed(self) {
+            return ptr;
         }
 
-        Upvalue::from_closed(index)
+        self.open_upvalues.push(ptr);
+        let mut ou = self.open_upvalues.clone();
+        ou.sort_by(|u, v| {
+            let u = self.get_upvalue(*u).stack_index(self);
+            let v = self.get_upvalue(*v).stack_index(self);
+
+            u.cmp(&v)
+        });
+
+        std::mem::swap(&mut self.open_upvalues, &mut ou);
+
+        ptr
     }
 
     fn read_name(&mut self) -> String {
         let name = self.read_constant().as_pointer();
         return self.get_object(name).as_string().clone();
+    }
+
+    fn close_upvalues(&mut self, stack_top: usize) {
+        if self.open_upvalues.is_empty() {
+            return;
+        }
+
+        loop {
+            if self.open_upvalues.is_empty() {
+                break;
+            }
+
+            let upvalue_ptr = *self.open_upvalues.last().unwrap();
+            let upvalue = *self.get_upvalue(upvalue_ptr);
+            if !upvalue.is_after(stack_top, self) {
+                break;
+            }
+
+            let value = self.get_upvalue(upvalue_ptr).value(self);
+            self.get_upvalue_mut(upvalue_ptr).close(value);
+
+            self.open_upvalues.pop();
+        }
     }
 }
 
@@ -1147,6 +1175,21 @@ mod test {
         }
 
         assert g() == 1;
+        "
+    }
+
+    test_program! {
+        multiple_closed_variables,
+        "
+        {
+            var x = 1;
+            var y = 2;
+            fun f() {
+                return x + y;
+            }
+        
+            assert 3 == f();
+        }
         "
     }
 

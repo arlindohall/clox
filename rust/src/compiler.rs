@@ -126,7 +126,7 @@ pub mod prec {
         Factor,
         Unary,
         Call,
-        Primary,
+        // Primary,
     }
     use Prec::*;
 
@@ -140,7 +140,7 @@ pub mod prec {
     pub const FACTOR: usize = Factor as usize;
     pub const UNARY: usize = Unary as usize;
     pub const CALL: usize = Call as usize;
-    pub const PRIMARY: usize = Primary as usize;
+    // pub const PRIMARY: usize = Primary as usize;
 }
 
 struct ParseRule {
@@ -508,10 +508,7 @@ impl<'a> Compiler<'a> {
         self.emit_bytes(function_constant, upvalues.len() as u8);
 
         for upvalue in upvalues {
-            self.emit_bytes(
-                upvalue.is_local as u8,
-                upvalue.index
-            );
+            self.emit_bytes(upvalue.is_local as u8, upvalue.index);
         }
 
         Ok(function)
@@ -578,7 +575,7 @@ impl<'a> Compiler<'a> {
             self.block()?;
             self.end_scope();
         } else {
-            self.epxression_statement();
+            self.expression_statement();
         }
 
         Ok(())
@@ -777,7 +774,7 @@ impl<'a> Compiler<'a> {
         self.function_mut().chunk.code[patch_location + 2] = byte2;
     }
 
-    fn epxression_statement(&mut self) {
+    fn expression_statement(&mut self) {
         self.expression();
         self.consume(Semicolon, "Expect ';' after expression.");
         self.emit_byte(op::POP);
@@ -852,6 +849,7 @@ impl<'a> Compiler<'a> {
 
     fn get_rule(&self, type_: &TokenType) -> ParseRule {
         match type_ {
+            // todo: short circuit and/or
             And => parse_rule(None, Some(binary), prec::AND),
             Assert => parse_rule(None, None, prec::NONE),
             Bang => parse_rule(Some(unary), None, prec::NONE),
@@ -864,7 +862,7 @@ impl<'a> Compiler<'a> {
             Equal => parse_rule(None, None, prec::NONE),
             EqualEqual => parse_rule(None, Some(binary), prec::EQUALITY),
             Error => parse_rule(None, None, prec::NONE),
-            False => parse_rule(Some(literal), None, prec::PRIMARY),
+            False => parse_rule(Some(literal), None, prec::NONE),
             For => parse_rule(None, None, prec::NONE),
             Fun => parse_rule(None, None, prec::NONE),
             Greater => parse_rule(None, Some(binary), prec::COMPARISON),
@@ -877,7 +875,7 @@ impl<'a> Compiler<'a> {
             LessEqual => parse_rule(None, Some(binary), prec::COMPARISON),
             Minus => parse_rule(Some(unary), Some(binary), prec::TERM),
             TokenNil => parse_rule(Some(literal), None, prec::NONE),
-            TokenNumber => parse_rule(Some(number), None, prec::ASSIGNMENT),
+            TokenNumber => parse_rule(Some(number), None, prec::NONE),
             Or => parse_rule(None, Some(binary), prec::OR),
             Plus => parse_rule(None, Some(binary), prec::TERM),
             Print => parse_rule(None, None, prec::NONE),
@@ -887,10 +885,10 @@ impl<'a> Compiler<'a> {
             Semicolon => parse_rule(None, None, prec::NONE),
             Slash => parse_rule(None, Some(binary), prec::FACTOR),
             Star => parse_rule(None, Some(binary), prec::FACTOR),
-            TokenString => parse_rule(Some(string), None, prec::ASSIGNMENT),
+            TokenString => parse_rule(Some(string), None, prec::NONE),
             Super => parse_rule(Some(super_), None, prec::NONE),
             This => parse_rule(Some(this_), None, prec::NONE),
-            True => parse_rule(Some(literal), None, prec::PRIMARY),
+            True => parse_rule(Some(literal), None, prec::NONE),
             Var => parse_rule(None, None, prec::NONE),
             While => parse_rule(None, None, prec::NONE),
         }
