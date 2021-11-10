@@ -257,7 +257,7 @@ impl Upvalue {
     pub fn value(&self, vm: &VM) -> Value {
         match self.value {
             UpvalueWrapper::Value(v) => v,
-            UpvalueWrapper::StackPointer(s) => *vm.stack.get(s).unwrap(),
+            UpvalueWrapper::StackPointer(s) => vm.stack[s],
             UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).value(vm),
         }
     }

@@ -455,8 +455,8 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn char_at(&self, ch: usize) -> &char {
-        self.scanner.source.get(ch).unwrap()
+    fn char_at(&self, ch: usize) -> char {
+        self.scanner.source[ch]
     }
 
     fn add_local(&mut self) {

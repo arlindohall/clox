@@ -43,7 +43,7 @@ impl Disassembler for Function {
         let mut i = 0;
 
         while i < self.chunk.code.len() {
-            let op = *self.chunk.code.get(i).unwrap();
+            let op = self.chunk.code[i];
 
             let action = match op {
                 ADD => Self::print_instruction,
@@ -96,7 +96,7 @@ impl GraphAssembly for Function {
         let mut i = 0;
 
         while i < self.chunk.code.len() - 1 {
-            let op = *self.chunk.code.get(i).unwrap();
+            let op = self.chunk.code[i];
 
             let action = match op {
                 ADD => Self::graph_instruction,
@@ -150,7 +150,7 @@ impl DebugTrace for VM {
         let ip = self.ip();
         let line_part = self.get_line_part(ip);
 
-        let op = *self.current_function().chunk.code.get(ip).unwrap();
+        let op = self.current_function().chunk.code[ip];
         let op = op.bytecode_name();
 
         // todo: this is expensive and happens on every instruction, is there a way to avoid?
@@ -205,8 +205,8 @@ impl Function {
     }
 
     fn graph_local(&self, i: usize, op: u8) -> usize {
-        let c = *self.chunk.code.get(i + 1).unwrap();
-        let next = self.chunk.code.get(i + 2).unwrap();
+        let c = self.chunk.code[i + 1];
+        let next = self.chunk.code[i + 2];
 
         eprintln!("\"{}: {:?}\" -> \"{}: {}\";", i, op, i + 1, c);
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 2, next);
@@ -216,10 +216,10 @@ impl Function {
 
     fn graph_constant(&self, i: usize, op: u8) -> usize {
         // todo: graph the constant itself, not the pointer
-        let c = *self.chunk.code.get(i + 1).unwrap();
-        let next = *self.chunk.code.get(i + 2).unwrap();
+        let c = self.chunk.code[i + 1];
+        let next = self.chunk.code[i + 2];
 
-        let c = self.chunk.constants.get(c as usize).unwrap();
+        let c = self.chunk.constants[c as usize];
 
         eprintln!("\"{}: {}\" -> \"{}: {}\";", i, op, i + 1, c);
         eprintln!("\"{}: {}\" -> \"{}: {}\";", i, op, i + 2, next);
@@ -228,15 +228,15 @@ impl Function {
     }
 
     fn graph_instruction(&self, i: usize, op: u8) -> usize {
-        let next = self.chunk.code.get(i + 1).unwrap();
+        let next = self.chunk.code[i + 1];
         eprintln!("\"{}: {:?}\" -> \"{}: {:?}\";", i, op, i + 1, next);
 
         i + 1
     }
 
     fn print_jump(&self, i: usize, op: &str) -> usize {
-        let byte1 = *self.chunk.code.get(i + 1).unwrap();
-        let byte2 = *self.chunk.code.get(i + 2).unwrap();
+        let byte1 = self.chunk.code[i + 1];
+        let byte2 = self.chunk.code[i + 2];
         let jump = Self::read_jump(byte1, byte2);
         let line_part = self.get_line_part(i);
 
@@ -247,8 +247,8 @@ impl Function {
 
     fn print_closure(&self, mut i: usize, op: &str) -> usize {
         let line_part = self.get_line_part(i);
-        let function = self.chunk.code.get(i + 1).unwrap();
-        let upval_count = *self.chunk.code.get(i + 2).unwrap() as usize;
+        let function = self.chunk.code[i + 1];
+        let upval_count = self.chunk.code[i + 2] as usize;
         i += 3;
 
         eprintln!(
@@ -259,8 +259,8 @@ impl Function {
         for upv in 0..upval_count {
             eprintln!(
                 "           UPVALUE(is_local={}, index={}) ",
-                *self.chunk.code.get(i + (2 * upv)).unwrap() != 0,
-                self.chunk.code.get(i + (2 * upv) + 1).unwrap()
+                self.chunk.code[i + (2 * upv)] != 0,
+                self.chunk.code[i + (2 * upv) + 1]
             )
         }
 
@@ -269,7 +269,7 @@ impl Function {
 
     fn print_local(&self, i: usize, op: &str) -> usize {
         // todo: graph the values instead of the pointer
-        let val = self.chunk.code.get(i + 1).unwrap();
+        let val = self.chunk.code[i + 1];
         let line_part = self.get_line_part(i);
 
         eprintln!("{:04} {}{:16}{:10}", i, line_part, op, val);
@@ -278,7 +278,7 @@ impl Function {
 
     fn print_constant(&self, i: usize, op: &str) -> usize {
         // todo: graph the values instead of the pointer
-        let val = self.chunk.code.get(i + 1).unwrap();
+        let val = self.chunk.code[i + 1];
         let line_part = self.get_line_part(i);
 
         eprintln!(
@@ -287,7 +287,7 @@ impl Function {
             line_part,
             op,
             val,
-            self.chunk.constants.get(*val as usize).unwrap()
+            self.chunk.constants[val as usize]
         );
         i + 2
     }
@@ -303,8 +303,8 @@ impl Function {
             return format!("{:<4}", "|");
         }
 
-        let line = *self.chunk.lines.get(i - 1).unwrap();
-        let this_line = *self.chunk.lines.get(i).unwrap();
+        let line = self.chunk.lines[i - 1];
+        let this_line = self.chunk.lines[i];
         if this_line > line {
             format!("{:<4}", this_line)
         } else {
@@ -326,8 +326,8 @@ impl VM {
             return format!("{:<4}", "|");
         }
 
-        let line = *self.current_function().chunk.lines.get(i - 1).unwrap();
-        let this_line = *self.current_function().chunk.lines.get(i).unwrap();
+        let line = self.current_function().chunk.lines[i - 1];
+        let this_line = self.current_function().chunk.lines[i];
         if this_line > line {
             format!("{:<4}", this_line)
         } else {

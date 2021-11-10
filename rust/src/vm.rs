@@ -579,7 +579,7 @@ impl VM {
 
     pub fn line_number(&self) -> usize {
         let frame = get_frame!(self).ip - 1;
-        *self.current_function().chunk.lines.get(frame).unwrap()
+        self.current_function().chunk.lines[frame]
     }
 
     fn byte(&mut self, ip: usize) -> u8 {
@@ -741,8 +741,14 @@ impl VM {
             // at op::GET_LOCAL
             Upvalue::from_local(base + index + 1)
         } else {
-            let upvalues = &self.current_closure().upvalues;
-            let upvalue = *upvalues.get(index).unwrap();
+            // Closure `upvalues` is guaranteed by the compiler to contain at least
+            // `index + 1` entries because `index` is set at compile time to
+            // the index of the parent's upvalue in the enclosing environment.
+            //
+            // Upvalues are created when the closure is created, so we know how
+            // many there are then and at compile time when we set the value of
+            // `index`.
+            let upvalue = self.current_closure().upvalues[index];
             Upvalue::from_enclosing(upvalue)
         };
 
@@ -771,19 +777,7 @@ impl VM {
             return ptr;
         }
 
-        // todo: is there a more efficient way to do this than copying the whole
-        // array without causing borrow checker errors?
         self.open_upvalues.push(ptr);
-        let mut ou = self.open_upvalues.clone();
-        ou.sort_by(|u, v| {
-            let u = self.get_upvalue(*u).stack_index(self);
-            let v = self.get_upvalue(*v).stack_index(self);
-
-            u.cmp(&v)
-        });
-
-        std::mem::swap(&mut self.open_upvalues, &mut ou);
-
         ptr
     }
 
@@ -793,28 +787,17 @@ impl VM {
     }
 
     fn close_upvalues(&mut self, stack_top: usize) {
-        if self.open_upvalues.is_empty() {
-            return;
-        }
-
-        loop {
-            // This loop could potentially close all open upvalues, for example if
-            // it is called after the only or last closure's variables go out of
-            // scope, or the next closure hasn't been created yet.
-            if self.open_upvalues.is_empty() {
-                break;
-            }
-
-            let upvalue_ptr = *self.open_upvalues.last().unwrap();
+        let mut i = 0;
+        while i < self.open_upvalues.len() {
+            let upvalue_ptr = self.open_upvalues[i];
             let upvalue = *self.get_upvalue(upvalue_ptr);
-            if !upvalue.is_after(stack_top, self) {
-                break;
+            if upvalue.is_after(stack_top, self) {
+                let value = upvalue.value(self);
+                self.get_upvalue_mut(upvalue_ptr).close(value);
+                self.open_upvalues.remove(i);
+                continue;
             }
-
-            let value = self.get_upvalue(upvalue_ptr).value(self);
-            self.get_upvalue_mut(upvalue_ptr).close(value);
-
-            self.open_upvalues.pop();
+            i += 1;
         }
     }
 }
