@@ -230,6 +230,22 @@ impl Upvalue {
         panic!("(Internal) Expected pointer to local variable, got closed value (this is a compiler bug).")
     }
 
+    pub fn stack_index(&self, vm: &VM) -> usize {
+        match self.value {
+            UpvalueWrapper::StackPointer(s) => s,
+            UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).stack_index(vm),
+            UpvalueWrapper::Value(_) => panic!("(Internal) Expected pointer, got closed value (this is a compiler bug)."),
+        }
+    }
+
+    pub fn index(&self) -> usize {
+        match self.value {
+            UpvalueWrapper::StackPointer(p) => p,
+            UpvalueWrapper::UpvaluePointer(_) => todo!(),
+            UpvalueWrapper::Value(_) => panic!("(Internal) Found closed value while iterating through open values (this is a compiler bug)."),
+        }
+    }
+
     pub fn get_parent(&self) -> MemoryEntry {
         if let UpvalueWrapper::UpvaluePointer(p) = self.value {
             return p;
@@ -243,14 +259,6 @@ impl Upvalue {
             UpvalueWrapper::Value(v) => v,
             UpvalueWrapper::StackPointer(s) => *vm.stack.get(s).unwrap(),
             UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).value(vm),
-        }
-    }
-
-    pub fn stack_index(&self, vm: &VM) -> usize {
-        match self.value {
-            UpvalueWrapper::StackPointer(s) => s,
-            UpvalueWrapper::UpvaluePointer(u) => vm.get_upvalue(u).stack_index(vm),
-            UpvalueWrapper::Value(_) => panic!("(Internal) Expected pointer, got closed value (this is a compiler bug)."),
         }
     }
 

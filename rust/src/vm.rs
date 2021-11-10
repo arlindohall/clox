@@ -716,8 +716,24 @@ impl VM {
     }
 
     fn allocate_upvalue(&mut self, is_local: bool, index: usize) -> MemoryEntry {
+        let base = get_frame!(self).slots;
+
+        // Check if we've already got an open upvalue that matches local and
+        // index; that lets us have shared references between closures. See the
+        // unit test `shared_counter` for an example. If a matching upvalues is
+        // an upvalue reference instead of a local reference, it's already a
+        // pointer, so updating it will update what we point to below with
+        // `from_enclosing`. If the upvalue is closed, it won't be in the
+        // `open_upvalues` array, and it's by definition fallen out of scope
+        // already, so we can't possibly be referring to the same local value.
+        for shared_value in &self.open_upvalues {
+            let upvalue = self.get_upvalue(*shared_value);
+            if is_local && upvalue.is_local() && upvalue.get_local() == base + index + 1 {
+                return *shared_value;
+            }
+        }
+
         let upvalue = if is_local {
-            let base = get_frame!(self).slots;
             // Base points to the function of the closure that was called. The upvalue
             // will never be that function because if it was it would be alocal in the
             // calling scope or a global. What we mean by `index` here is the index of
@@ -1264,6 +1280,34 @@ mod test {
         assert 1 == t();
         assert 2 == t();
         assert 1 == r();
+        "
+    }
+
+    test_program! {
+        shared_counter,
+        "
+        var c1;
+        var c2;
+        fun counter() {
+            var x = 0;
+            fun c1f() {
+                x = x + 1;
+                return x;
+            }
+            fun c2f() {
+                x = x + 1;
+                return x;
+            }
+            c1 = c1f;
+            c2 = c2f;
+        }
+
+
+        counter();
+        assert 1 == c1();
+        assert 2 == c2();
+        assert 3 == c1();
+        assert 4 == c2();
         "
     }
 
