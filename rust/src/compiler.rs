@@ -485,7 +485,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn fun_declaration(&mut self) -> Result<(), LoxErrorChain> {
-        let name = self.parse_variable("Expect function name after fun keywoard");
+        let name = self.parse_variable("Expect function name after fun keyword");
         self.mark_initialized();
         self.function_body()?;
         self.define_variable(name);
@@ -752,7 +752,7 @@ impl<'a> Compiler<'a> {
         (byte1, byte2)
     }
 
-    /// Ammend a jump instruction's two bytes for target with the location
+    /// Amend a jump instruction's two bytes for target with the location
     /// in the source code that it will jump to.
     ///
     /// `Patch_location` is the location in the source that the jump is
@@ -981,7 +981,7 @@ impl<'a> Compiler<'a> {
     ///
     /// If you call this right after emitting a jump, it will point to
     /// whatever logic runs if the jump condition fails or whatever was
-    /// emitted righ after the "body" of the previous jump (in the case
+    /// emitted right after the "body" of the previous jump (in the case
     /// of the unconditional jump of an if statement)
     fn next_instruction(&mut self) -> usize {
         self.function().chunk.code.len()
@@ -1259,7 +1259,7 @@ mod test {
         if let Object::String(s) = vm.get_object(ptr) {
             assert_eq!(**s, "x");
         } else {
-            panic!("expected memory to contian string variable name")
+            panic!("expected memory to contain string variable name")
         }
     }
 

@@ -17,7 +17,7 @@ pub const STACK_ERROR: &str = "(Internal) tried to access invalid stack position
 pub const CONSTANT_ERROR: &str = "(Internal) tried to access invalid constant.";
 pub const GLOBAL_ERROR: &str = "Fatal: tried to access non-existent global variable.";
 pub const MEMORY_ERROR: &str = "(Internal) invalid memory access.";
-pub const STACK_UNDERFLOW: &str = "(Internal) tried to acces invalid stack frame.";
+pub const STACK_UNDERFLOW: &str = "(Internal) tried to access invalid stack frame.";
 pub const STACK_OVERFLOW: &str = "Stack overflow.";
 
 /// Lox Virtual Machine.

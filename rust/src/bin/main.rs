@@ -8,9 +8,9 @@ use loxvm::vm::VM;
 
 /// Entry point for the lox interpreter
 ///
-/// This function plust the Lox struct handles most of the IO
-/// which leaves the rest of the implementaiton to deal with the
-/// langauge, and makes the rest of the VM, compiler, and related
+/// This function plus the Lox struct handles most of the IO
+/// which leaves the rest of the implementation to deal with the
+/// language, and makes the rest of the VM, compiler, and related
 /// constructs easier to test.
 fn main() -> Result<(), Box<dyn Error>> {
     let lox = Lox { vm: VM::default() };
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 /// The top-level language, including the IO logic for
 /// the [REPL](#method.repl) and script interpreter.
-/// It has functions for running the REPL aand files.
+/// It has functions for running the REPL and files.
 struct Lox {
     vm: VM,
 }
